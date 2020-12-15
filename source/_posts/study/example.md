@@ -1,5 +1,5 @@
 ---
-title: 分库分表
+title: 陈明园是傻屌
 date: 2020-12-15 10:40:38
 categories: study
 tags: [mycat]
