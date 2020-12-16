@@ -1,2 +1,0 @@
-# ykcmy.github.io
-hexo
