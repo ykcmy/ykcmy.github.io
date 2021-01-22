@@ -79,8 +79,8 @@
   
     <article id="post-hello-world" class="h-entry article article-type-post" itemprop="blogPost" itemscope itemtype="https://schema.org/BlogPosting">
   <div class="article-meta">
-    <a href="/2021/01/14/hello-world/" class="article-date">
-  <time class="dt-published" datetime="2021-01-14T06:57:23.493Z" itemprop="datePublished">2021-01-14</time>
+    <a href="/2021/01/22/hello-world/" class="article-date">
+  <time class="dt-published" datetime="2021-01-22T03:43:03.805Z" itemprop="datePublished">2021-01-22</time>
 </a>
     
   </div>
@@ -91,7 +91,7 @@
         
   
     <h1 itemprop="name">
-      <a class="p-name article-title" href="/2021/01/14/hello-world/">Hello World</a>
+      <a class="p-name article-title" href="/2021/01/22/hello-world/">Hello World</a>
     </h1>
   
 
@@ -116,10 +116,123 @@
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://example.com/2021/01/14/hello-world/" data-id="ckjwi3e43000000se22tncyov" data-title="Hello World" class="article-share-link">分享</a>
+      <a data-url="http://example.com/2021/01/22/hello-world/" data-id="ckk7qoazm0000yltwht9ph0z6" data-title="Hello World" class="article-share-link">分享</a>
       
       
       
+    </footer>
+  </div>
+  
+</article>
+
+
+
+  
+    <article id="post-study/mysql1" class="h-entry article article-type-post" itemprop="blogPost" itemscope itemtype="https://schema.org/BlogPosting">
+  <div class="article-meta">
+    <a href="/2021/01/22/study/mysql1/" class="article-date">
+  <time class="dt-published" datetime="2021-01-22T03:41:38.000Z" itemprop="datePublished">2021-01-22</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/study/">study</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="p-name article-title" href="/2021/01/22/study/mysql1/">一条sql是如何执行的</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="e-content article-entry" itemprop="articleBody">
+      
+        <p>平时我们使用数据库，看到的通常都是一个整体。比如，你有个最简单的表，表里只有一个ID字段，在执行下面这个查询语句时：</p>
+<figure class="highlight"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">mysql&gt; select * from T where ID=10；</span><br></pre></td></tr></table></figure>
+
+<p>我们看到的只是输入一条语句，返回一个结果，却不知道这条语句在MySQL内部的执行过程。</p>
+<img src="/image/mysql1.1.png" width="80%">
+
+<p>​                                                                        mysql 的逻辑架构图</p>
+<p>大体来说，MySQL可以分为Server层和存储引擎层两部分。</p>
+<p>Server层包括连接器、查询缓存、分析器、优化器、执行器等，涵盖MySQL的大多数核心服务功能，以及所有的内置函数（如日期、时间、数学和加密函数等），所有跨存储引擎的功能都在这一层实现，比如存储过程、触发器、视图等。</p>
+<p>从图中不难看出，不同的存储引擎共用一个<strong>Server层</strong>，也就是从连接器到执行器的部分。</p>
+<h1 id="连接器"><a href="#连接器" class="headerlink" title="连接器"></a>连接器</h1><p>第一步，你会先连接到这个数据库上，这时候接待你的就是连接器。连接器负责跟客户端建立连接、获取权限、维持和管理连接。连接命令一般是这么写的：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">mysql -h$ip -P$port -u$user -p</span><br></pre></td></tr></table></figure>
+
+<p>连接命令中的mysql是客户端工具，用来跟服务端建立连接。在完成经典的TCP握手后，连接器就要开始认证你的身份，这个时候用的就是你输入的用户名和密码。</p>
+<ul>
+<li>如果用户名或密码不对，你就会收到一个”Access denied for user”的错误，然后客户端程序结束执行。</li>
+<li>如果用户名密码认证通过，连接器会到权限表里面查出你拥有的权限。之后，这个连接里面的权限判断逻辑，都将依赖于此时读到的权限。</li>
+</ul>
+<p>这就意味着，一个用户成功建立连接后，即使你用管理员账号对这个用户的权限做了修改，也不会影响已经存在连接的权限。修改完成后，只有再新建的连接才会使用新的权限设置。</p>
+<p>客户端如果太长时间没动静，连接器就会自动将它断开。这个时间是由参数wait_timeout控制的，默认值是8小时。</p>
+<p>如果在连接被断开之后，客户端再次发送请求的话，就会收到一个错误提醒： <strong>Lost connection to MySQL server during query</strong>。这时候如果你要继续，就需要重连，然后再执行请求了。</p>
+<p>建立连接的过程通常是比较复杂的，所以我建议你在使用中要尽量减少建立连接的动作，也就是尽量使用<strong>长连接</strong>。</p>
+<p>但是全部使用长连接后，你可能会发现，有些时候MySQL占用内存涨得特别快，这是因为<strong>MySQL在执行过程中临时使用的内存是管理在连接对象里面的</strong>。这些资源会在连接断开的时候才释放。所以如果长连接累积下来，可能导致内存占用太大，被系统强行杀掉（OOM），从现象看就是MySQL异常重启了。</p>
+<p>怎么解决这个问题呢？你可以考虑以下两种方案。</p>
+<ol>
+<li><strong>定期断开长连接。使用一段时间，或者程序里面判断执行过一个占用内存的大查询后，断开连接，之后要查询再重连。</strong></li>
+<li><strong>如果你用的是MySQL 5.7或更新版本，可以在每次执行一个比较大的操作后，通过执行 mysql_reset_connection来重新初始化连接资源。这个过程不需要重连和重新做权限验证，但是会将连接恢复到刚刚创建完时的状态。</strong></li>
+</ol>
+<h1 id="查询缓存"><a href="#查询缓存" class="headerlink" title="查询缓存"></a>查询缓存</h1><p>连接建立完成后，你就可以执行select语句了。执行逻辑就会来到第二步：查询缓存。</p>
+<p>MySQL拿到一个查询请求后，会先到查询缓存看看，之前是不是执行过这条语句。之前执行过的语句及其结果可能会以key-value对的形式，被直接缓存在内存中。key是查询的语句，value是查询的结果。如果你的查询能够直接在这个缓存中找到key，那么这个value就会被直接返回给客户端。</p>
+<p>如果语句不在查询缓存中，就会继续后面的执行阶段。执行完成后，执行结果会被存入查询缓存中。你可以看到，如果查询命中缓存，MySQL不需要执行后面的复杂操作，就可以直接返回结果，这个效率会很高。</p>
+<p><strong>但是大多数情况下我会建议你不要使用查询缓存，为什么呢？因为查询缓存往往弊大于利。</strong></p>
+<p>查询缓存的失效非常频繁，只要有对一个表的更新，这个表上所有的查询缓存都会被清空。因此很可能你费劲地把结果存起来，还没使用呢，就被一个更新全清空了。对于更新压力大的数据库来说，查询缓存的命中率会非常低。除非你的业务就是有一张静态表，很长时间才会更新一次。比如，一个系统配置表，那这张表上的查询才适合使用查询缓存。</p>
+<p>好在MySQL也提供了这种“按需使用”的方式。你可以将参数query_cache_type设置成DEMAND，这样对于默认的SQL语句都不使用查询缓存。而对于你确定要使用查询缓存的语句，可以用SQL_CACHE显式指定，像下面这个语句一样：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">mysql&gt; select SQL_CACHE * from T where ID&#x3D;10；</span><br></pre></td></tr></table></figure>
+
+<p>需要注意的是，MySQL 8.0版本直接将查询缓存的整块功能删掉了，也就是说8.0开始彻底没有这个功能了。</p>
+<h1 id="分析器"><a href="#分析器" class="headerlink" title="分析器"></a>分析器</h1><p>如果没有命中查询缓存，就要开始真正执行语句了。首先，MySQL需要知道你要做什么，因此需要对SQL语句做解析。</p>
+<p>分析器先会做“词法分析”。你输入的是由多个字符串和空格组成的一条SQL语句，MySQL需要识别出里面的字符串分别是什么，代表什么。</p>
+<p>MySQL从你输入的”select”这个关键字识别出来，这是一个查询语句。它也要把字符串“T”识别成“表名T”，把字符串“ID”识别成“列ID”。</p>
+<p>做完了这些识别以后，就要做“语法分析”。根据词法分析的结果，语法分析器会根据语法规则，判断你输入的这个SQL语句是否满足MySQL语法。</p>
+<p>如果你的语句不对，就会收到“You have an error in your SQL syntax”的错误提醒，比如下面这个语句select少打了开头的字母“s”。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">mysql&gt; elect * from t where ID&#x3D;1;</span><br><span class="line"></span><br><span class="line">ERROR 1064 (42000): You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near &#39;elect * from t where ID&#x3D;1&#39; at line 1</span><br></pre></td></tr></table></figure>
+
+<p>一般语法错误会提示第一个出现错误的位置，所以你要关注的是紧接“use near”的内容。</p>
+<h1 id="优化器"><a href="#优化器" class="headerlink" title="优化器"></a>优化器</h1><p>经过了分析器，MySQL就知道你要做什么了。在开始执行之前，还要先经过优化器的处理。</p>
+<p>优化器是在表里面有多个索引的时候，决定使用哪个索引；或者在一个语句有多表关联（join）的时候，决定各个表的连接顺序。比如你执行下面这样的语句，这个语句是执行两个表的join：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">mysql&gt; select * from t1 join t2 using(ID)  where t1.c&#x3D;10 and t2.d&#x3D;20;</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li>既可以先从表t1里面取出c=10的记录的ID值，再根据ID值关联到表t2，再判断t2里面d的值是否等于20。</li>
+<li>也可以先从表t2里面取出d=20的记录的ID值，再根据ID值关联到t1，再判断t1里面c的值是否等于10。</li>
+</ul>
+<p>这两种执行方法的逻辑结果是一样的，但是执行的效率会有不同，而优化器的作用就是决定选择使用哪一个方案。</p>
+<h1 id="执行器"><a href="#执行器" class="headerlink" title="执行器"></a>执行器</h1><p>MySQL通过分析器知道了你要做什么，通过优化器知道了该怎么做，于是就进入了执行器阶段，开始执行语句。</p>
+<p>开始执行的时候，要先判断一下你对这个表T有没有执行查询的权限，如果没有，就会返回没有权限的错误，如下所示(在工程实现上，如果命中查询缓存，会在查询缓存放回结果的时候，做权限验证。查询也会在优化器之前调用precheck验证权限)。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">mysql&gt; select * from T where ID&#x3D;10;</span><br><span class="line"></span><br><span class="line">ERROR 1142 (42000): SELECT command denied to user &#39;b&#39;@&#39;localhost&#39; for table &#39;T&#39;</span><br></pre></td></tr></table></figure>
+
+<p>如果有权限，就打开表继续执行。打开表的时候，执行器就会根据表的引擎定义，去使用这个引擎提供的接口。</p>
+<p>比如我们这个例子中的表T中，ID字段没有索引，那么执行器的执行流程是这样的：</p>
+<ol>
+<li>调用InnoDB引擎接口取这个表的第一行，判断ID值是不是10，如果不是则跳过，如果是则将这行存在结果集中；</li>
+<li>调用引擎接口取“下一行”，重复相同的判断逻辑，直到取到这个表的最后一行。</li>
+<li>执行器将上述遍历过程中所有满足条件的行组成的记录集作为结果集返回给客户端。</li>
+</ol>
+<p>至此，这个语句就执行完成了。</p>
+<p>对于有索引的表，执行的逻辑也差不多。第一次调用的是“取满足条件的第一行”这个接口，之后循环取“满足条件的下一行”这个接口，这些接口都是引擎中已经定义好的。</p>
+<p>你会在数据库的慢查询日志中看到一个rows_examined的字段，表示这个语句执行过程中扫描了多少行。这个值就是在执行器每次调用引擎获取数据行的时候累加的。</p>
+<p>在有些场景下，执行器调用一次，在引擎内部则扫描了多行，因此<strong>引擎扫描行数跟rows_examined并不是完全相同的。</strong></p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://example.com/2021/01/22/study/mysql1/" data-id="ckk7qob000006yltwhmmtgn21" data-title="一条sql是如何执行的" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/mysql/" rel="tag">mysql</a></li></ul>
+
     </footer>
   </div>
   
@@ -258,7 +371,7 @@ schemas.xml:<figure class="highlight xml"><table><tr><td class="gutter"><pre><sp
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://example.com/2020/12/15/study/mycat%E5%88%86%E5%BA%93%E5%88%86%E8%A1%A8/" data-id="ckjwi3e4e000200se6pc1flkk" data-title="分库分表" class="article-share-link">分享</a>
+      <a data-url="http://example.com/2020/12/15/study/mycat%E5%88%86%E5%BA%93%E5%88%86%E8%A1%A8/" data-id="ckk7qoazw0002yltw1g9d2tmb" data-title="分库分表" class="article-share-link">分享</a>
       
       
       
@@ -414,7 +527,7 @@ PATH=$MYCAT_HOME/bin:$PATH
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://example.com/2020/12/15/study/mycat%E8%AF%BB%E5%86%99%E5%88%86%E7%A6%BB/" data-id="ckjwi3e4f000300seepxla5m1" data-title="mycat读写分离" class="article-share-link">分享</a>
+      <a data-url="http://example.com/2020/12/15/study/mycat%E8%AF%BB%E5%86%99%E5%88%86%E7%A6%BB/" data-id="ckk7qoazx0003yltw1sf2074u" data-title="mycat读写分离" class="article-share-link">分享</a>
       
       
       
@@ -542,7 +655,7 @@ PATH=$MYCAT_HOME/bin:$PATH
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://example.com/2020/12/15/study/RocketMQ/" data-id="ckjwi3e4m000c00se9tg43bol" data-title="rocketMq学习" class="article-share-link">分享</a>
+      <a data-url="http://example.com/2020/12/15/study/RocketMQ/" data-id="ckk7qob05000hyltwdbb0gh01" data-title="rocketMq学习" class="article-share-link">分享</a>
       
       
       
@@ -755,7 +868,7 @@ PATH=$MYCAT_HOME/bin:$PATH
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://example.com/2020/12/15/study/rabbitMq/" data-id="ckjwi3e4n000d00se3p8p7axk" data-title="rabbitMq学习" class="article-share-link">分享</a>
+      <a data-url="http://example.com/2020/12/15/study/rabbitMq/" data-id="ckk7qob05000iyltw57x4cjmq" data-title="rabbitMq学习" class="article-share-link">分享</a>
       
       
       
@@ -795,7 +908,7 @@ PATH=$MYCAT_HOME/bin:$PATH
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://example.com/2020/12/15/%E4%B8%80%E4%B8%AAhexo%E7%9A%84%E7%A4%BA%E4%BE%8B/" data-id="ckjwi3e4b000100segz7e41cm" data-title="一个hexo的示例" class="article-share-link">分享</a>
+      <a data-url="http://example.com/2020/12/15/%E4%B8%80%E4%B8%AAhexo%E7%9A%84%E7%A4%BA%E4%BE%8B/" data-id="ckk7qoazu0001yltw04d2bxbs" data-title="一个hexo的示例" class="article-share-link">分享</a>
       
       
       
@@ -827,7 +940,7 @@ PATH=$MYCAT_HOME/bin:$PATH
   <div class="widget-wrap">
     <h3 class="widget-title">标签</h3>
     <div class="widget">
-      <ul class="tag-list" itemprop="keywords"><li class="tag-list-item"><a class="tag-list-link" href="/tags/MQ/" rel="tag">MQ</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/mycat/" rel="tag">mycat</a></li></ul>
+      <ul class="tag-list" itemprop="keywords"><li class="tag-list-item"><a class="tag-list-link" href="/tags/MQ/" rel="tag">MQ</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/mycat/" rel="tag">mycat</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/mysql/" rel="tag">mysql</a></li></ul>
     </div>
   </div>
 
@@ -837,7 +950,7 @@ PATH=$MYCAT_HOME/bin:$PATH
   <div class="widget-wrap">
     <h3 class="widget-title">标签云</h3>
     <div class="widget tagcloud">
-      <a href="/tags/MQ/" style="font-size: 10px;">MQ</a> <a href="/tags/mycat/" style="font-size: 10px;">mycat</a>
+      <a href="/tags/MQ/" style="font-size: 20px;">MQ</a> <a href="/tags/mycat/" style="font-size: 20px;">mycat</a> <a href="/tags/mysql/" style="font-size: 10px;">mysql</a>
     </div>
   </div>
 
@@ -859,7 +972,11 @@ PATH=$MYCAT_HOME/bin:$PATH
       <ul>
         
           <li>
-            <a href="/2021/01/14/hello-world/">Hello World</a>
+            <a href="/2021/01/22/hello-world/">Hello World</a>
+          </li>
+        
+          <li>
+            <a href="/2021/01/22/study/mysql1/">一条sql是如何执行的</a>
           </li>
         
           <li>
@@ -872,10 +989,6 @@ PATH=$MYCAT_HOME/bin:$PATH
         
           <li>
             <a href="/2020/12/15/study/RocketMQ/">rocketMq学习</a>
-          </li>
-        
-          <li>
-            <a href="/2020/12/15/study/rabbitMq/">rabbitMq学习</a>
           </li>
         
       </ul>
