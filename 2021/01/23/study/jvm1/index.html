@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  
+  <title>jvm认识-1 | 杨凯的笔记</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <meta name="description" content="Java 虚拟机具体是怎样运行 Java 字节码的？从虚拟机视角来看，执行 Java 代码首先需要将它编译而成的 class 文件加载到 Java 虚拟机中。加载后的 Java 类会被存放于方法区（Method Area）中。实际运行时，虚拟机会执行方法区内的代码。 如果你熟悉 X86 的话，你会发现这和段式内存管理中的代码段类似。而且，Java 虚拟机同样也在内存中划分出堆和栈来存储运行时数据。">
+<meta property="og:type" content="article">
+<meta property="og:title" content="jvm认识-1">
+<meta property="og:url" content="http://example.com/2021/01/23/study/jvm1/index.html">
+<meta property="og:site_name" content="杨凯的笔记">
+<meta property="og:description" content="Java 虚拟机具体是怎样运行 Java 字节码的？从虚拟机视角来看，执行 Java 代码首先需要将它编译而成的 class 文件加载到 Java 虚拟机中。加载后的 Java 类会被存放于方法区（Method Area）中。实际运行时，虚拟机会执行方法区内的代码。 如果你熟悉 X86 的话，你会发现这和段式内存管理中的代码段类似。而且，Java 虚拟机同样也在内存中划分出堆和栈来存储运行时数据。">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://example.com/image/jvm1.1.png">
+<meta property="og:image" content="http://example.com/image/jvm1.2.png">
+<meta property="article:published_time" content="2021-01-23T07:41:38.000Z">
+<meta property="article:modified_time" content="2021-02-23T07:21:02.415Z">
+<meta property="article:author" content="yk">
+<meta property="article:tag" content="jvm">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://example.com/image/jvm1.1.png">
+  
+    <link rel="alternate" href="/atom.xml" title="杨凯的笔记" type="application/atom+xml">
+  
+  
+    <link rel="shortcut icon" href="/favicon.png">
+  
+  
+    
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/typeface-source-code-pro@0.0.71/index.min.css">
+
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+    
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.min.css">
+
+  
+<meta name="generator" content="Hexo 5.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">杨凯的笔记</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">日习则学不忘，自勉则身不坠</a>
+        </h2>
+      
+    </div>
+    <div id="header-inner" class="inner">
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">Home</a>
+        
+          <a class="main-nav-link" href="/archives">Archives</a>
+        
+      </nav>
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS 订阅"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="搜索"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="搜索"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://example.com"></form>
+      </div>
+    </div>
+  </div>
+</header>
+
+      <div class="outer">
+        <section id="main"><article id="post-study/jvm1" class="h-entry article article-type-post" itemprop="blogPost" itemscope itemtype="https://schema.org/BlogPosting">
+  <div class="article-meta">
+    <a href="/2021/01/23/study/jvm1/" class="article-date">
+  <time class="dt-published" datetime="2021-01-23T07:41:38.000Z" itemprop="datePublished">2021-01-23</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/study/">study</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="p-name article-title" itemprop="headline name">
+      jvm认识-1
+    </h1>
+  
+
+      </header>
+    
+    <div class="e-content article-entry" itemprop="articleBody">
+      
+        <h4 id="Java-虚拟机具体是怎样运行-Java-字节码的？"><a href="#Java-虚拟机具体是怎样运行-Java-字节码的？" class="headerlink" title="Java 虚拟机具体是怎样运行 Java 字节码的？"></a>Java 虚拟机具体是怎样运行 Java 字节码的？</h4><p>从虚拟机视角来看，执行 Java 代码首先需要将它编译而成的 class 文件加载到 Java 虚拟<br>机中。加载后的 Java 类会被存放于方法区（Method Area）中。实际运行时，虚拟机会执<br>行方法区内的代码。</p>
+<p>如果你熟悉 X86 的话，你会发现这和段式内存管理中的代码段类似。而且，Java 虚拟机同<br>样也在内存中划分出堆和栈来存储运行时数据。</p>
+<p>不同的是，Java 虚拟机会将栈细分为面向 Java 方法的 Java 方法栈，面向本地方法（用<br>C++ 写的 native 方法）的本地方法栈，以及存放各个线程执行位置的 PC 寄存器。</p>
+<p><img src="/image/jvm1.1.png" alt="image-20210223135452884"></p>
+<p>在运行过程中，每当调用进入一个 Java 方法，Java 虚拟机会在当前线程的 Java 方法栈中<br>生成一个栈帧，用以存放局部变量以及字节码的操作数。这个栈帧的大小是提前计算好的，<br>而且 Java 虚拟机不要求栈帧在内存空间里连续分布。</p>
+<p>当退出当前执行的方法时，不管是正常返回还是异常返回，Java 虚拟机均会弹出当前线程<br>的当前栈帧，并将之舍弃。</p>
+<p>从硬件视角来看，Java 字节码无法直接执行。因此，Java 虚拟机需要将字节码翻译成机器<br>码。</p>
+<p>在 HotSpot 里面，上述翻译过程有两种形式：第一种是解释执行，即逐条将字节码翻译成<br>机器码并执行；第二种是即时编译（Just-In-Time compilation，JIT），即将一个方法中<br>包含的所有字节码编译成机器码后再执行。</p>
+<p><img src="/image/jvm1.2.png" alt="image-20210223135652372"></p>
+<p>前者的优势在于无需等待编译，而后者的优势在于实际运行速度更快。HotSpot 默认采用<br>混合模式，综合了解释执行和即时编译两者的优点。它会先解释执行字节码，而后将其中反<br>复执行的热点代码，以方法为单位进行即时编译。</p>
+<h4 id="Java虚拟机是如何加载Java类的"><a href="#Java虚拟机是如何加载Java类的" class="headerlink" title="Java虚拟机是如何加载Java类的?"></a>Java虚拟机是如何加载Java类的?</h4><p><strong>加载</strong></p>
+<p>加载，是指查找字节流，并且据此创建类的过程。前面提到，对于数组类来说，它并没有对<br>应的字节流，而是由 Java 虚拟机直接生成的。对于其他的类来说，Java 虚拟机则需要借助<br>类加载器来完成查找字节流的过程。</p>
+<p>启动类加载器（bootstrapclass loader）。启动类加载器是由 C++ 实现的，没有对应的 Java 对象，因此在 Java 中，只能用 null 来指代。</p>
+<p>除了启动类加载器之外，其他的类加载器都是 java.lang.ClassLoader 的子类，因此有对应<br>的 Java 对象。这些类加载器需要先由另一个类加载器，比如说启动类加载器，加载至 Java<br>虚拟机中，方能执行类加载。</p>
+<p>双亲委派模型：每当一个类加载器接收到加载请求时，它会先将请求转发给父类加载器。在父类加载器没有找到所请求的类的情况下，该类加载器才会尝试去加载。</p>
+<p>在 Java 9 之前，启动类加载器负责加载最为基础、最为重要的类，比如存放在 JRE 的 lib<br>目录下 jar 包中的类（以及由虚拟机参数 -Xbootclasspath 指定的类）。除了启动类加载<br>器之外，另外两个重要的类加载器是扩展类加载器（extension class loader）和应用类加<br>载器（application class loader），均由 Java 核心类库提供。</p>
+<p>扩展类加载器的父类加载器是启动类加载器。它负责加载相对次要、但又通用的类，比如存<br>放在 JRE 的 lib/ext 目录下 jar 包中的类（以及由系统变量 java.ext.dirs 指定的类）。</p>
+<p>应用类加载器的父类加载器则是扩展类加载器。它负责加载应用程序路径下的类。（这里的<br>应用程序路径，便是指虚拟机参数 -cp/-classpath、系统变量 java.class.path 或环境变量<br>CLASSPATH 所指定的路径。）默认情况下，应用程序中包含的类便是由应用类加载器加载<br>的。</p>
+<p>Java 9 引入了模块系统，并且略微更改了上述的类加载器1。扩展类加载器被改名为平台类<br>加载器（platform class loader）。Java SE 中除了少数几个关键模块，比如说 java.base<br>是由启动类加载器加载之外，其他的模块均由平台类加载器所加载。</p>
+<p>除了由 Java 核心类库提供的类加载器外，我们还可以加入自定义的类加载器，来实现特殊<br>的加载方式。举例来说，我们可以对 class 文件进行加密，加载时再利用自定义的类加载器。</p>
+<p><strong>链接</strong></p>
+<p>链接，是指将创建成的类合并至 Java 虚拟机中，使之能够执行的过程。它可分为验证、准<br>备以及解析三个阶段。</p>
+<p>验证：验证阶段的目的，在于确保被加载类能够满足 Java 虚拟机的约束条件。</p>
+<p>准备：准备阶段的目的，则是为被加载类的静态字段分配内存。Java 代码中对静态字段的具体初<br>始化，则会在稍后的初始化阶段中进行。</p>
+<p>除了分配内存外，部分 Java 虚拟机还会在此阶段构造其他跟类层次相关的数据结构，比如<br>说用来实现虚方法的动态绑定的方法表。</p>
+<p>在 class 文件被加载至 Java 虚拟机之前，这个类无法知道其他类及其方法、字段所对应的<br>具体地址，甚至不知道自己方法、字段的地址。因此，每当需要引用这些成员时，Java 编<br>译器会生成一个符号引用。在运行阶段，这个符号引用一般都能够无歧义地定位到具体目标<br>上。</p>
+<p>解析： 解析阶段的目的，正是将这些符号引用解析成为实际引用。如果符号引用指向一个未被加载<br>的类，或者未被加载类的字段或方法，那么解析将触发这个类的加载（但未必触发这个类的<br>链接以及初始化。）</p>
+<p><strong>初始化</strong></p>
+<p>在 Java 代码中，如果要初始化一个静态字段，我们可以在声明时直接赋值，也可以在静态<br>代码块中对其赋值。</p>
+<p>如果直接赋值的静态字段被 final 所修饰，并且它的类型是基本类型或字符串时，那么该字<br>段便会被 Java 编译器标记成常量值（ConstantValue），其初始化直接由 Java 虚拟机完<br>成。除此之外的直接赋值操作，以及所有静态代码块中的代码，则会被 Java 编译器置于同<br>一方法中，并把它命名为 &lt; clinit &gt;。</p>
+<p>类加载的最后一步是初始化，便是为标记为常量值的字段赋值，以及执行 &lt; clinit &gt; 方法的<br>过程。Java 虚拟机会通过加锁来确保类的 &lt; clinit &gt; 方法仅被执行一次。</p>
+<p>那么，类的初始化何时会被触发呢？JVM 规范枚举了下述多种触发情况：</p>
+<ol>
+<li>当虚拟机启动时，初始化用户指定的主类；</li>
+<li>当遇到用以新建目标类实例的 new 指令时，初始化 new 指令的目标类；</li>
+<li>当遇到调用静态方法的指令时，初始化该静态方法所在的类；</li>
+<li>当遇到访问静态字段的指令时，初始化该静态字段所在的类；</li>
+<li>子类的初始化会触发父类的初始化；</li>
+<li>如果一个接口定义了 default 方法，那么直接实现或者间接实现该接口的类的初始化，<br>会触发该接口的初始化；</li>
+<li>使用反射 API 对某个类进行反射调用时，初始化这个类；</li>
+<li>当初次调用 MethodHandle 实例时，初始化该 MethodHandle 指向的方法所在的类。</li>
+</ol>
+<p>Q:</p>
+<p>1:为什么使用JVM？<br>1-1:可以轻松实现Java代码的跨平台执行<br>1-2:JVM提供了一个托管平台，提供内存管理、垃圾回收、编译时动态校验等功能<br>1-3:使用JVM能够让我们的编程工作更轻松、高效节省公司成本，提示社会化的整体快发效率，我们只关注和业务相关的程序逻辑的编写，其他业务无关但对于编程同样重要的事情交给JVM来处理</p>
+<p>2.热点代码和非热点代码：</p>
+<p>看到有人说热点代码的区别，在git里面涉及到的热点代码有两种算法，基于采样的热点探测和基于计数器的热点探测。一般采用的都是基于计数器的热点探测，两者的优缺点百度一下就知道了。基于计数器的热点探测又有两个计数器，方法调用计数器，回边计数器，他们在C1和C2又有不同的阈值。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://example.com/2021/01/23/study/jvm1/" data-id="cklhojuya00020csxetnq1bui" data-title="jvm认识-1" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/jvm/" rel="tag">jvm</a></li></ul>
+
+    </footer>
+  </div>
+  
+    
+<nav id="article-nav">
+  
+    <a href="/2021/02/19/study/mysql2/" id="article-nav-newer" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">前一篇</strong>
+      <div class="article-nav-title">
+        
+          一条更新sql是如何执行的
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2021/01/22/study/mysql1/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">后一篇</strong>
+      <div class="article-nav-title">一条sql是如何执行的</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+
+
+</section>
+        
+          <aside id="sidebar">
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">分类</h3>
+    <div class="widget">
+      <ul class="category-list"><li class="category-list-item"><a class="category-list-link" href="/categories/study/">study</a></li></ul>
+    </div>
+  </div>
+
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">标签</h3>
+    <div class="widget">
+      <ul class="tag-list" itemprop="keywords"><li class="tag-list-item"><a class="tag-list-link" href="/tags/MQ/" rel="tag">MQ</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/jvm/" rel="tag">jvm</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/mycat/" rel="tag">mycat</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/mysql/" rel="tag">mysql</a></li></ul>
+    </div>
+  </div>
+
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">标签云</h3>
+    <div class="widget tagcloud">
+      <a href="/tags/MQ/" style="font-size: 15px;">MQ</a> <a href="/tags/jvm/" style="font-size: 10px;">jvm</a> <a href="/tags/mycat/" style="font-size: 15px;">mycat</a> <a href="/tags/mysql/" style="font-size: 20px;">mysql</a>
+    </div>
+  </div>
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">归档</h3>
+    <div class="widget">
+      <ul class="archive-list"><li class="archive-list-item"><a class="archive-list-link" href="/archives/2021/02/">二月 2021</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2021/01/">一月 2021</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/12/">十二月 2020</a></li></ul>
+    </div>
+  </div>
+
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">最新文章</h3>
+    <div class="widget">
+      <ul>
+        
+          <li>
+            <a href="/2021/02/23/hello-world/">Hello World</a>
+          </li>
+        
+          <li>
+            <a href="/2021/02/23/study/mysql3/">mysql事务隔离</a>
+          </li>
+        
+          <li>
+            <a href="/2021/02/19/study/mysql2/">一条更新sql是如何执行的</a>
+          </li>
+        
+          <li>
+            <a href="/2021/01/23/study/jvm1/">jvm认识-1</a>
+          </li>
+        
+          <li>
+            <a href="/2021/01/22/study/mysql1/">一条sql是如何执行的</a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+
+  
+</aside>
+        
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-info" class="inner">
+      
+      &copy; 2021 yk<br>
+      Powered by <a href="https://hexo.io/" target="_blank">Hexo</a>
+    </div>
+  </div>
+</footer>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">Home</a>
+  
+    <a href="/archives" class="mobile-nav-link">Archives</a>
+  
+</nav>
+    
+
+
+<script src="/js/jquery-3.4.1.min.js"></script>
+
+
+
+  
+<script src="/fancybox/jquery.fancybox.min.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+
+
+
+  </div>
+</body>
+</html>
