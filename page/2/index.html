@@ -77,6 +77,278 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-study/mycat分库分表" class="h-entry article article-type-post" itemprop="blogPost" itemscope itemtype="https://schema.org/BlogPosting">
+  <div class="article-meta">
+    <a href="/2020/12/15/study/mycat%E5%88%86%E5%BA%93%E5%88%86%E8%A1%A8/" class="article-date">
+  <time class="dt-published" datetime="2020-12-15T02:40:38.000Z" itemprop="datePublished">2020-12-15</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/study/">study</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="p-name article-title" href="/2020/12/15/study/mycat%E5%88%86%E5%BA%93%E5%88%86%E8%A1%A8/">分库分表</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="e-content article-entry" itemprop="articleBody">
+      
+        <h2 id="分库分表方案选型"><a href="#分库分表方案选型" class="headerlink" title="分库分表方案选型"></a>分库分表方案选型</h2><h4 id="方案背景："><a href="#方案背景：" class="headerlink" title="方案背景："></a>方案背景：</h4><blockquote>
+<p>当项目随公司业务以及时间的发展，数据量相应就会增加，当单库的并发达到2000以上，或者单表的数据量达到千万级别，那么这个时候分库（分表）就不可避免，这篇文章主要调研市面上针对分库分表的方案，为后期分库分表做铺垫。</p>
+</blockquote>
+<h5 id="何为数据切分："><a href="#何为数据切分：" class="headerlink" title="何为数据切分："></a>何为数据切分：</h5><p>简单来说，就是指通过某种特定的条件，将我们存放在同一个数据库中的数据分散存<br>放到多个数据库（主机）上面，以达到分散单台设备负载的效果。<br> 数据切分分为两种：</p>
+<h6 id="垂直切分，-水平切分"><a href="#垂直切分，-水平切分" class="headerlink" title="垂直切分， 水平切分"></a>垂直切分， 水平切分</h6><h5 id="垂直切分优缺点："><a href="#垂直切分优缺点：" class="headerlink" title="垂直切分优缺点："></a>垂直切分优缺点：</h5><p> 优点：</p>
+<ul>
+<li>数据库的拆分简单明了，拆分规则明确；</li>
+<li>应用程序模块清晰明确，整合容易；</li>
+<li>数据维护方便易行，容易定位；</li>
+</ul>
+<p>缺点：</p>
+<ul>
+<li>部分表关联无法在数据库级别完成，需要在程序中完成，存在跨库join的问题，对于这类的<br>表，就需要去做平衡，是数据库让步业务，共用一个数据源，还是分成多个库，业务之间通<br>过接口来做调用；在系统初期，数据量比较少，或者资源有限的情况下，会选择共用数据源<br>，但是当数据发展到了一定的规模，负载很大的情况，就需要必须去做分割；</li>
+<li>对于访问极其频繁且数据量超大的表仍然存在性能瓶颈，不一定能满足要求；</li>
+<li>事务处理相对更为复杂；</li>
+<li>切分达到一定程度之后，扩展性会遇到限制；</li>
+<li>过多切分可能会带来系统过渡复杂而难以维护。</li>
+</ul>
+<h5 id="水平拆分："><a href="#水平拆分：" class="headerlink" title="水平拆分："></a>水平拆分：</h5><p>相对于垂直拆分，水平拆分不是将表做分类，而是按照某个字段的某种规则来分散到多个库之中<br>，每个表中包含一部分数据。简单来说，我们可以将数据的水平切分理解为是按照数据行的切分<br>，就是将表中的某些行切分到一个数据库，而另外的某些行又切分到其他的数据库</p>
+<p>优点：</p>
+<ul>
+<li> 表关联基本能够在数据库端全部完成；</li>
+<li> 不会存在某些超大型数据量和高负载的表遇到瓶颈的问题；</li>
+<li> 应用程序端整体架构改动相对较少；</li>
+<li> 事务处理相对简单；</li>
+<li> 只要切分规则能够定义好，基本上较难遇到扩展性限制；</li>
+</ul>
+<p>缺点：</p>
+<ul>
+<li> 切分规则相对更为复杂，很难抽象出一个能够满足整个数据库的切分规则；</li>
+<li> 后期数据的维护难度有所增加，人为手工定位数据更困难；</li>
+<li> 应用系统各模块耦合度较高，可能会对后面数据的迁移拆分造成一定的困难。</li>
+<li> 跨节点合并排序分页问题</li>
+<li> 多数据源管理问题</li>
+</ul>
+<h5 id="几种典型的分片规则："><a href="#几种典型的分片规则：" class="headerlink" title="几种典型的分片规则："></a>几种典型的分片规则：</h5><ul>
+<li>按照tenantId 求模，将数据分散到不同的数据库，具有相同数据用户的数<br>据都被分散到一个库中。</li>
+<li>按照日期，将不同月甚至日的数据分散到不同的库中。</li>
+<li>按照某个特定的字段求摸，或者根据特定范围段分散到不同的库中</li>
+</ul>
+<h5 id="数据切分参考："><a href="#数据切分参考：" class="headerlink" title="数据切分参考："></a>数据切分参考：</h5><p>第一原则：能不切分尽量不要切分。<br>第二原则：如果要切分一定要选择合适的切分规则，提前规划好。<br>第三原则：数据切分尽量通过数据冗余或表分组（Table Group）来降低跨库Join的可能。<br>第四原则：由于数据库中间件对数据Join实现的优劣难以把握，而且实现高性能难度极<br>大，业务读取尽量少使用多表Join。</p>
+<blockquote>
+<p>综上描述，数据切分带来的核心问题主要有三个：<br> 引入分布式事务的问题；<br> 跨节点Join 的问题；<br> 跨节点合并排序分页问题；</p>
+</blockquote>
+<h2 id="数据库代理中间件选型："><a href="#数据库代理中间件选型：" class="headerlink" title="数据库代理中间件选型："></a>数据库代理中间件选型：</h2><h3 id="Mycat"><a href="#Mycat" class="headerlink" title="Mycat"></a>Mycat</h3><ul>
+<li>是一个数据库代理</li>
+<li>MySQL、SQL Server、Oracle、DB2等主流数据库，也支持MongoDB这种新型NoSQL方式的存储</li>
+<li>Mycat并不存储数据，只做数据路由</li>
+</ul>
+<p>Mycat的原理中最重要的一个动词是“拦截”，它拦截了用户发送过来的SQL语句，首先<br>对SQL语句做了一些特定的分析：如分片分析、路由分析、读写分离分析、缓存分析等，<br>然后将此SQL发往后端的真实数据库，并将返回的结果做适当的处理，最终再返回给用户</p>
+<img src="/image/2020-08-26_5f45cbadcab17.png">
+
+
+<h4 id="Mycat中间件配置："><a href="#Mycat中间件配置：" class="headerlink" title="Mycat中间件配置："></a>Mycat中间件配置：</h4><ul>
+<li>1.逻辑库配置：<br>server.xml:<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">user</span> <span class="attr">name</span>=<span class="string">&quot;user&quot;</span>&gt;</span></span><br><span class="line">	<span class="tag">&lt;<span class="name">property</span> <span class="attr">name</span>=<span class="string">&quot;password&quot;</span>&gt;</span>******<span class="tag">&lt;/<span class="name">property</span>&gt;</span></span><br><span class="line">	<span class="tag">&lt;<span class="name">property</span> <span class="attr">name</span>=<span class="string">&quot;schemas&quot;</span>&gt;</span>avengers<span class="tag">&lt;/<span class="name">property</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">user</span>&gt;</span></span><br></pre></td></tr></table></figure>
+schemas.xml:<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br></pre></td><td class="code"><pre><span class="line">	<span class="tag">&lt;<span class="name">schema</span> <span class="attr">name</span>=<span class="string">&quot;avengers&quot;</span> <span class="attr">checkSQLschema</span>=<span class="string">&quot;true&quot;</span> <span class="attr">dataNode</span>=<span class="string">&quot;localdn1,localdn2&quot;</span>&gt;</span></span><br><span class="line">		<span class="comment">&lt;!--mycat中的逻辑表--&gt;</span></span><br><span class="line">		<span class="comment">&lt;!--</span></span><br><span class="line"><span class="comment">		name:逻辑表的名称，名称必须唯一</span></span><br><span class="line"><span class="comment">		dataNode:值必须跟dataNode标签中的name对应，如果值过多可以用 dataNode=&quot;dn$0-99,cn$100-199&quot;</span></span><br><span class="line"><span class="comment">		rule:分片规则配置，定义在rule.xml中，必须与tableRule中的name对应</span></span><br><span class="line"><span class="comment">		ruleRequired:该属性用于指定表是否绑定分片规则，如果配置为true，但没有配置具体rule的话 ，程序会报错</span></span><br><span class="line"><span class="comment">		primaryKey：该逻辑表对应真实表的主键，例如：分片的规则是使用非主键进行分片的，那么在使用主键查询的时候，就会发送查询语句到所有配置的DN上，如果使用该属性配置真实表的主键。难么MyCat会缓存主键与具体DN的信息，那么再次使用非主键进行查询的时候就不会进行广播式的查询，就会直接发送语句给具体的DN，但是尽管配置该属性，如果缓存并没有命中的话，还是会发送语句给具体的DN，来获得数据</span></span><br><span class="line"><span class="comment">		type：全局表：global  每一个dn都会保存一份全局表，普通表：不指定该值为globla的所有表</span></span><br><span class="line"><span class="comment">		autoIncrement:autoIncrement=“true”,默认是禁用的</span></span><br><span class="line"><span class="comment">		needAddLimit：默认是true</span></span><br><span class="line"><span class="comment">		--&gt;</span></span><br><span class="line">		<span class="tag">&lt;<span class="name">table</span> <span class="attr">name</span>=<span class="string">&quot;t_order&quot;</span> <span class="attr">dataNode</span>=<span class="string">&quot;localdn&quot;</span> <span class="attr">autoIncrement</span>=<span class="string">&quot;true&quot;</span> <span class="attr">subTables</span>=<span class="string">&quot;t_order$1-3&quot;</span> <span class="attr">primaryKey</span>=<span class="string">&quot;id&quot;</span> <span class="attr">rule</span>=<span class="string">&quot;mod-long&quot;</span>&gt;</span></span><br><span class="line">		<span class="tag">&lt;/<span class="name">table</span>&gt;</span></span><br><span class="line"><span class="comment">&lt;!--		&lt;table name=&quot;mycat_sequence&quot; dataNode=&quot;localdn&quot; primaryKey=&quot;name&quot;/&gt;--&gt;</span></span><br><span class="line">	<span class="tag">&lt;/<span class="name">schema</span>&gt;</span></span><br><span class="line"></span><br><span class="line">	<span class="comment">&lt;!-- &lt;dataNode name=&quot;dn1$0-743&quot; dataHost=&quot;localhost1&quot; database=&quot;db$0-743&quot;</span></span><br><span class="line"><span class="comment">		/&gt; --&gt;</span></span><br><span class="line">	<span class="tag">&lt;<span class="name">dataNode</span> <span class="attr">name</span>=<span class="string">&quot;localdn1&quot;</span> <span class="attr">dataHost</span>=<span class="string">&quot;localhost1&quot;</span> <span class="attr">database</span>=<span class="string">&quot;consult&quot;</span> /&gt;</span></span><br><span class="line">	<span class="tag">&lt;<span class="name">dataNode</span> <span class="attr">name</span>=<span class="string">&quot;localdn2&quot;</span> <span class="attr">dataHost</span>=<span class="string">&quot;localhost2&quot;</span> <span class="attr">database</span>=<span class="string">&quot;consult&quot;</span> /&gt;</span></span><br><span class="line">		<span class="comment">&lt;!--</span></span><br><span class="line"><span class="comment">	maxCon:指定每个读写实例连接池的最大连接。也就是说，标签内嵌套的writeHost、readHost标签都会使用这个属性的值来实例化出连接池的最大连接数</span></span><br><span class="line"><span class="comment">	minCon:指定每个读写实例连接池的最小连接，初始化连接池的大小</span></span><br><span class="line"><span class="comment">	balance:</span></span><br><span class="line"><span class="comment"> balance=&quot;0&quot;, 不开启读写分离机制，所有读操作都发送到当前可用的writeHost上。</span></span><br><span class="line"><span class="comment"> balance=&quot;1&quot;，全部的readHost与stand by writeHost参与select语句的负载均衡，简单的说，当双主双从模式(M1-&gt;S1，M2-&gt;S2，并且M1与 M2互为主备)，正常情况下，M2,S1,S2都参与select语句的负载均衡。</span></span><br><span class="line"><span class="comment"> balance=&quot;2&quot;，所有读操作都随机的在writeHost、readhost上分发。</span></span><br><span class="line"><span class="comment"> balance=&quot;3&quot;，所有读请求随机的分发到writeHost对应的readhost执行，writerHost不负担读压力，注意balance=3只在1.4及其以后版本有，1.3没有。</span></span><br><span class="line"><span class="comment">	writeType:</span></span><br><span class="line"><span class="comment">	负载均衡类型，目前的取值有3种：</span></span><br><span class="line"><span class="comment"> writeType=&quot;0&quot;, 所有写操作发送到配置的第一个writeHost，第一个挂了切到还生存的第二个writeHost，重新启动后已切换后的为准，切换记录在配置文件中:dnindex.properties .</span></span><br><span class="line"><span class="comment">writeType=&quot;1&quot;，所有写操作都随机的发送到配置的writeHost。</span></span><br><span class="line"><span class="comment"> writeType=&quot;2&quot;，没实现</span></span><br><span class="line"><span class="comment">	switchType:</span></span><br><span class="line"><span class="comment">  - 表示不自动切换</span></span><br><span class="line"><span class="comment">    默认值，自动切换</span></span><br><span class="line"><span class="comment">    基于MySQL主从同步的状态决定是否切换</span></span><br><span class="line"><span class="comment">      心跳语句为 show slave status</span></span><br><span class="line"><span class="comment">    基于MySQL galary cluster的切换机制（适合集群）（1.4.1）</span></span><br><span class="line"><span class="comment">		--&gt;</span></span><br><span class="line">	<span class="tag">&lt;<span class="name">dataHost</span> <span class="attr">name</span>=<span class="string">&quot;localhost1&quot;</span> <span class="attr">maxCon</span>=<span class="string">&quot;1000&quot;</span> <span class="attr">minCon</span>=<span class="string">&quot;10&quot;</span> <span class="attr">balance</span>=<span class="string">&quot;0&quot;</span></span></span><br><span class="line"><span class="tag">			  <span class="attr">writeType</span>=<span class="string">&quot;0&quot;</span> <span class="attr">dbType</span>=<span class="string">&quot;mysql&quot;</span> <span class="attr">dbDriver</span>=<span class="string">&quot;jdbc&quot;</span> <span class="attr">switchType</span>=<span class="string">&quot;1&quot;</span>  <span class="attr">slaveThreshold</span>=<span class="string">&quot;100&quot;</span>&gt;</span></span><br><span class="line">		<span class="comment">&lt;!--heartbeat标签</span></span><br><span class="line"><span class="comment">		MYSQL可以使用select user()</span></span><br><span class="line"><span class="comment">		Oracle可以使用select 1 from dual</span></span><br><span class="line"><span class="comment">		--&gt;</span></span><br><span class="line">		<span class="tag">&lt;<span class="name">heartbeat</span>&gt;</span>select user()<span class="tag">&lt;/<span class="name">heartbeat</span>&gt;</span></span><br><span class="line">		<span class="tag">&lt;<span class="name">connectionInitSql</span>&gt;</span><span class="tag">&lt;/<span class="name">connectionInitSql</span>&gt;</span></span><br><span class="line">		<span class="comment">&lt;!-- can have multi write hosts --&gt;</span></span><br><span class="line">		<span class="comment">&lt;!--</span></span><br><span class="line"><span class="comment">		如果writeHost指定的后端数据库宕机，那么这个writeHost绑定的所有readHost都将不可用。另一方面，由于这个writeHost宕机系统会自动的检测到，并切换到备用的writeHost上去</span></span><br><span class="line"><span class="comment">		--&gt;</span></span><br><span class="line">	<span class="tag">&lt;<span class="name">writeHost</span> <span class="attr">host</span>=<span class="string">&quot;hostM1&quot;</span> <span class="attr">url</span>=<span class="string">&quot;jdbc:mysql://localhost:3306&quot;</span> <span class="attr">user</span>=<span class="string">&quot;root&quot;</span></span></span><br><span class="line"><span class="tag">				<span class="attr">password</span>=<span class="string">&quot;123456&quot;</span>&gt;</span></span><br><span class="line">	<span class="tag">&lt;/<span class="name">writeHost</span>&gt;</span></span><br><span class="line">	<span class="tag">&lt;<span class="name">dataHost</span> <span class="attr">name</span>=<span class="string">&quot;localhost2&quot;</span> <span class="attr">maxCon</span>=<span class="string">&quot;1000&quot;</span> <span class="attr">minCon</span>=<span class="string">&quot;10&quot;</span> <span class="attr">balance</span>=<span class="string">&quot;0&quot;</span></span></span><br><span class="line"><span class="tag">			  <span class="attr">writeType</span>=<span class="string">&quot;0&quot;</span> <span class="attr">dbType</span>=<span class="string">&quot;mysql&quot;</span> <span class="attr">dbDriver</span>=<span class="string">&quot;jdbc&quot;</span> <span class="attr">switchType</span>=<span class="string">&quot;1&quot;</span>  <span class="attr">slaveThreshold</span>=<span class="string">&quot;100&quot;</span>&gt;</span></span><br><span class="line">		<span class="comment">&lt;!--heartbeat标签</span></span><br><span class="line"><span class="comment">		MYSQL可以使用select user()</span></span><br><span class="line"><span class="comment">		Oracle可以使用select 1 from dual</span></span><br><span class="line"><span class="comment">		--&gt;</span></span><br><span class="line">		<span class="tag">&lt;<span class="name">heartbeat</span>&gt;</span>select user()<span class="tag">&lt;/<span class="name">heartbeat</span>&gt;</span></span><br><span class="line">		<span class="tag">&lt;<span class="name">connectionInitSql</span>&gt;</span><span class="tag">&lt;/<span class="name">connectionInitSql</span>&gt;</span></span><br><span class="line">		<span class="comment">&lt;!-- can have multi write hosts --&gt;</span></span><br><span class="line">		<span class="comment">&lt;!--</span></span><br><span class="line"><span class="comment">		如果writeHost指定的后端数据库宕机，那么这个writeHost绑定的所有readHost都将不可用。另一方面，由于这个writeHost宕机系统会自动的检测到，并切换到备用的writeHost上去</span></span><br><span class="line"><span class="comment">		--&gt;</span></span><br><span class="line">	<span class="tag">&lt;<span class="name">writeHost</span> <span class="attr">host</span>=<span class="string">&quot;hostM2&quot;</span> <span class="attr">url</span>=<span class="string">&quot;jdbc:mysql://localhost:3306&quot;</span> <span class="attr">user</span>=<span class="string">&quot;root&quot;</span></span></span><br><span class="line"><span class="tag">				<span class="attr">password</span>=<span class="string">&quot;123456&quot;</span>&gt;</span></span><br><span class="line">		<span class="tag">&lt;<span class="name">readHost</span> <span class="attr">host</span>=<span class="string">&quot;hostM2&quot;</span> <span class="attr">url</span>=<span class="string">&quot;jdbc:mysql://localhost:3307&quot;</span> 			 <span class="attr">password</span>=<span class="string">&quot;123456&quot;</span> <span class="attr">user</span>=<span class="string">&quot;root&quot;</span>/&gt;</span></span><br><span class="line">	<span class="tag">&lt;/<span class="name">writeHost</span>&gt;</span></span><br><span class="line">	<span class="tag">&lt;/<span class="name">dataHost</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+</li>
+</ul>
+<h3 id="MyCat-分片规则"><a href="#MyCat-分片规则" class="headerlink" title="MyCat 分片规则"></a>MyCat 分片规则</h3><p>参考：<a target="_blank" rel="noopener" href="http://www.mycat.io/document/Mycat_V1.6.0.pdf">http://www.mycat.io/document/Mycat_V1.6.0.pdf</a></p>
+<h4 id="根据id取模分片规则："><a href="#根据id取模分片规则：" class="headerlink" title="根据id取模分片规则："></a>根据id取模分片规则：</h4><p>rule.xml </p>
+<blockquote>
+<p>PartitionByMod需要 分片id必须能够转换为数字<br>PartitionByHashMod  根据分片id hash,所以并不强制要求 column 的数据类型是数字，也可以是字符型</p>
+</blockquote>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">tableRule</span> <span class="attr">name</span>=<span class="string">&quot;mod-long&quot;</span>&gt;</span></span><br><span class="line">	<span class="tag">&lt;<span class="name">rule</span>&gt;</span></span><br><span class="line">		<span class="tag">&lt;<span class="name">columns</span>&gt;</span>tenant_id<span class="tag">&lt;/<span class="name">columns</span>&gt;</span></span><br><span class="line">		<span class="tag">&lt;<span class="name">algorithm</span>&gt;</span>mod-long<span class="tag">&lt;/<span class="name">algorithm</span>&gt;</span></span><br><span class="line">	<span class="tag">&lt;/<span class="name">rule</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">tableRule</span>&gt;</span></span><br><span class="line"></span><br><span class="line"><span class="tag">&lt;<span class="name">function</span> <span class="attr">name</span>=<span class="string">&quot;mod-long&quot;</span> <span class="attr">class</span>=<span class="string">&quot;io.mycat.route.function.PartitionByMod&quot;</span>&gt;</span></span><br><span class="line">	<span class="comment">&lt;!-- how many data nodes --&gt;</span></span><br><span class="line">	<span class="tag">&lt;<span class="name">property</span> <span class="attr">name</span>=<span class="string">&quot;count&quot;</span>&gt;</span>2<span class="tag">&lt;/<span class="name">property</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">function</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<h4 id="固定hash分片："><a href="#固定hash分片：" class="headerlink" title="固定hash分片："></a>固定hash分片：</h4><p>rule.xml：</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">tableRule</span> <span class="attr">name</span>=<span class="string">&quot;sharding-by-intfile&quot;</span>&gt;</span></span><br><span class="line">	<span class="tag">&lt;<span class="name">rule</span>&gt;</span></span><br><span class="line">		<span class="tag">&lt;<span class="name">columns</span>&gt;</span>province<span class="tag">&lt;/<span class="name">columns</span>&gt;</span></span><br><span class="line">		<span class="tag">&lt;<span class="name">algorithm</span>&gt;</span>hash-int<span class="tag">&lt;/<span class="name">algorithm</span>&gt;</span></span><br><span class="line">	<span class="tag">&lt;/<span class="name">rule</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">tableRule</span>&gt;</span></span><br><span class="line"></span><br><span class="line"><span class="tag">&lt;<span class="name">function</span> <span class="attr">name</span>=<span class="string">&quot;hash-int&quot;</span></span></span><br><span class="line"><span class="tag">		  <span class="attr">class</span>=<span class="string">&quot;io.mycat.route.function.PartitionByFileMap&quot;</span>&gt;</span></span><br><span class="line">	<span class="tag">&lt;<span class="name">property</span> <span class="attr">name</span>=<span class="string">&quot;mapFile&quot;</span>&gt;</span>partition-hash-int.txt<span class="tag">&lt;/<span class="name">property</span>&gt;</span></span><br><span class="line">	<span class="comment">&lt;!--type默认值为0，0表示Integer，非零表示String--&gt;</span></span><br><span class="line">	<span class="tag">&lt;<span class="name">property</span> <span class="attr">name</span>=<span class="string">&quot;type&quot;</span>&gt;</span>1<span class="tag">&lt;/<span class="name">property</span>&gt;</span></span><br><span class="line">	<span class="comment">&lt;!--defaultNode 默认节点：小于0表示不设置默认节点，大于等于0表示设置默认节点,不能解析的枚举就存到默认节点--&gt;</span></span><br><span class="line">	<span class="tag">&lt;<span class="name">property</span> <span class="attr">name</span>=<span class="string">&quot;defaultNode&quot;</span>&gt;</span>0<span class="tag">&lt;/<span class="name">property</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">function</span>&gt;</span></span><br></pre></td></tr></table></figure>
+<p>partition-hash-int.txt：</p>
+<blockquote>
+<p>tenantId = 0</p>
+</blockquote>
+<figure class="highlight html"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">234234234214231423=0</span><br><span class="line">784656757853535643=1</span><br><span class="line">345451423534645645=0</span><br><span class="line">895784654345431245=1</span><br><span class="line">563457651435234632=1</span><br><span class="line">534534567587588567=1</span><br></pre></td></tr></table></figure>
+<h4 id="一致性hash算法分片"><a href="#一致性hash算法分片" class="headerlink" title="一致性hash算法分片"></a>一致性hash算法分片</h4><blockquote>
+<p>数据分布不均匀，<br>利用虚拟节点分布于hash环，通过hash算法将数据均匀分布在节点</p>
+</blockquote>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">tableRule</span> <span class="attr">name</span>=<span class="string">&quot;sharding-by-murmur&quot;</span>&gt;</span></span><br><span class="line">	<span class="tag">&lt;<span class="name">rule</span>&gt;</span></span><br><span class="line">		<span class="tag">&lt;<span class="name">columns</span>&gt;</span>orderId<span class="tag">&lt;/<span class="name">columns</span>&gt;</span></span><br><span class="line">		<span class="tag">&lt;<span class="name">algorithm</span>&gt;</span>murmur<span class="tag">&lt;/<span class="name">algorithm</span>&gt;</span></span><br><span class="line">	<span class="tag">&lt;/<span class="name">rule</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">tableRule</span>&gt;</span></span><br><span class="line"></span><br><span class="line"><span class="tag">&lt;<span class="name">function</span> <span class="attr">name</span>=<span class="string">&quot;murmur&quot;</span></span></span><br><span class="line"><span class="tag">		  <span class="attr">class</span>=<span class="string">&quot;io.mycat.route.function.PartitionByMurmurHash&quot;</span>&gt;</span></span><br><span class="line">	<span class="tag">&lt;<span class="name">property</span> <span class="attr">name</span>=<span class="string">&quot;seed&quot;</span>&gt;</span>0<span class="tag">&lt;/<span class="name">property</span>&gt;</span><span class="comment">&lt;!-- 默认是0 --&gt;</span></span><br><span class="line">	<span class="tag">&lt;<span class="name">property</span> <span class="attr">name</span>=<span class="string">&quot;count&quot;</span>&gt;</span>2<span class="tag">&lt;/<span class="name">property</span>&gt;</span><span class="comment">&lt;!-- 要分片的数据库节点数量，必须指定，否则没法分片 --&gt;</span></span><br><span class="line">	<span class="tag">&lt;<span class="name">property</span> <span class="attr">name</span>=<span class="string">&quot;virtualBucketTimes&quot;</span>&gt;</span>160<span class="tag">&lt;/<span class="name">property</span>&gt;</span><span class="comment">&lt;!-- 一个实际的数据库节点被映射为这么多虚拟节点，默认是160倍，也就是虚拟节点数是物理节点数的160倍 --&gt;</span></span><br><span class="line">	<span class="comment">&lt;!-- &lt;property name=&quot;weightMapFile&quot;&gt;weightMapFile&lt;/property&gt; 节点的权重，没有指定权重的节点默认是1。以properties文件的格式填写，以从0开始到count-1的整数值也就是节点索引为key，以节点权重值为值。所有权重值必须是正整数，否则以1代替 --&gt;</span></span><br><span class="line">	<span class="tag">&lt;<span class="name">property</span> <span class="attr">name</span>=<span class="string">&quot;bucketMapPath&quot;</span>&gt;</span>E:\idea\Mycat-Server-Mycat-server-1675-release\src\main\resources<span class="tag">&lt;/<span class="name">property</span>&gt;</span></span><br><span class="line">	<span class="comment">&lt;!-- 用于测试时观察各物理节点与虚拟节点的分布情况，如果指定了这个属性，会把虚拟节点的murmur hash值与物理节点的映射按行输出到这个文件，没有默认值，如果不指定，就不会输出任何东西 --&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">function</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<h4 id="调增一致性hash算法分片"><a href="#调增一致性hash算法分片" class="headerlink" title="调增一致性hash算法分片"></a>调增一致性hash算法分片</h4><blockquote>
+<p>数据分布均匀，效率高，消耗少，有分布式事务问题</p>
+</blockquote>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">tableRule</span> <span class="attr">name</span>=<span class="string">&quot;jch&quot;</span>&gt;</span></span><br><span class="line">	<span class="tag">&lt;<span class="name">rule</span>&gt;</span></span><br><span class="line">		<span class="tag">&lt;<span class="name">columns</span>&gt;</span>tenant_id<span class="tag">&lt;/<span class="name">columns</span>&gt;</span></span><br><span class="line">		<span class="tag">&lt;<span class="name">algorithm</span>&gt;</span>jump-consistent-hash<span class="tag">&lt;/<span class="name">algorithm</span>&gt;</span></span><br><span class="line">	<span class="tag">&lt;/<span class="name">rule</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">tableRule</span>&gt;</span></span><br><span class="line"></span><br><span class="line">	<span class="tag">&lt;<span class="name">function</span> <span class="attr">name</span>=<span class="string">&quot;jump-consistent-hash&quot;</span> <span class="attr">class</span>=<span class="string">&quot;io.mycat.route.function.PartitionByJumpConsistentHash&quot;</span>&gt;</span></span><br><span class="line">	<span class="tag">&lt;<span class="name">property</span> <span class="attr">name</span>=<span class="string">&quot;totalBuckets&quot;</span>&gt;</span>2<span class="tag">&lt;/<span class="name">property</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">function</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<h4 id="myCat-全局表"><a href="#myCat-全局表" class="headerlink" title="myCat 全局表"></a>myCat 全局表</h4><blockquote>
+<p>数据冗余</p>
+</blockquote>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">table</span> <span class="attr">name</span>=<span class="string">&quot;sys_xxx&quot;</span> <span class="attr">primaryKey</span>=<span class="string">&quot;id&quot;</span> <span class="attr">dataNode</span>=<span class="string">&quot;dn140,dn141&quot;</span> <span class="attr">type</span>=<span class="string">&quot;global&quot;</span>/&gt;</span></span><br></pre></td></tr></table></figure>
+
+<h4 id="MyCat-动态扩容"><a href="#MyCat-动态扩容" class="headerlink" title="MyCat 动态扩容"></a>MyCat 动态扩容</h4><p>1.新增 newSchema.xml 和 newRule.xml 并配置成扩容后的节点<br><img src="/image/2020-12-10_5fd1e973ebd30.png"></p>
+<p>2.修改dataMigrate.sh文件<br>该文件类型是dos的，需要修改为unix类型<br>查看.sh文件类型：:set ff<br>修改.sh文件类型：:set ff=unix 回车</p>
+<p>3.修改dataMigrate.sh中的配置<br>基本上修改一个即可：</p>
+<blockquote>
+<p>mysql bin路径<br>RUN_CMD=”$RUN_CMD -mysqlBin=/usr/bin”<br>这个是mysqldump文件的路径，<br>找该文件：find / -name mysqldump</p>
+</blockquote>
+<p>4.修改/conf/下migrateTables.properties配置文件，指定需要迁移的逻辑库和表</p>
+<ol start="5">
+<li>执行 ./dataMigrate.sh</li>
+</ol>
+<p>数据迁移后将newSchema.xml和 newRule.xml 替换schema.xml,rule.xml(整个过程可以在mycat 未开启的状态下迁移)</p>
+<p>注意事项<br>1、jdk不能用openJdk，需要自己安装，配置环境变量<br>2、之前的老的schema.xml和rule.xml老配置不能动<br>3、新增迁移后的节点新配置newSchema.xml和newRule.xml<br>4、mycat bug migrateTables.properties中逻辑库的名称不能既有大些又有小写。<br>5、迁移类：DataMigrator</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://example.com/2020/12/15/study/mycat%E5%88%86%E5%BA%93%E5%88%86%E8%A1%A8/" data-id="cklkjks4j0007y5n4ezxo1oqv" data-title="分库分表" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/mycat/" rel="tag">mycat</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+
+
+
+  
+    <article id="post-study/RocketMQ" class="h-entry article article-type-post" itemprop="blogPost" itemscope itemtype="https://schema.org/BlogPosting">
+  <div class="article-meta">
+    <a href="/2020/12/15/study/RocketMQ/" class="article-date">
+  <time class="dt-published" datetime="2020-12-15T02:40:38.000Z" itemprop="datePublished">2020-12-15</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/study/">study</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="p-name article-title" href="/2020/12/15/study/RocketMQ/">rocketMq学习</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="e-content article-entry" itemprop="articleBody">
+      
+        <h1 id="RokectMQ学习"><a href="#RokectMQ学习" class="headerlink" title="RokectMQ学习"></a>RokectMQ学习</h1><h3 id="1-概念"><a href="#1-概念" class="headerlink" title="1.概念"></a>1.概念</h3><p>nameServer: Name Server是一个几乎无状态节点，可集群部署，节点之间无任何信息同步</p>
+<p>消息：字节数组</p>
+<p><strong>设计理念</strong>：</p>
+<p><strong>基于主题</strong>，发布和订阅</p>
+<p><strong>核心功能</strong>：消息发送，消息存储（持久化方式：磁盘），消息消费</p>
+<p><strong>设计目标</strong>：</p>
+<ul>
+<li>顺序消息</li>
+<li>消息过滤（客户端实现，服务端实现）</li>
+<li>消息存储 从两个维度：消息堆积（顺序读写在一个文件，存储空间预警机制，过期文件删除机制）；存储性能</li>
+</ul>
+<h4 id="参数"><a href="#参数" class="headerlink" title="参数"></a>参数</h4><h4 id="nameserver"><a href="#nameserver" class="headerlink" title="nameserver"></a><strong>nameserver</strong></h4><p>相对来说，nameserver的稳定性非常高。原因有二:</p>
+<ol>
+<li>nameserver互相独立，彼此没有通信关系，单台nameserver挂掉，不影响其他nameserver，即使全部挂掉，也不影响业务系统使用，这点类似于dubbo的zookeeper。</li>
+<li>nameserver不会有频繁的读写，所以性能开销非常小，稳定性很高。</li>
+</ol>
+<h4 id="broker"><a href="#broker" class="headerlink" title="broker"></a><strong>broker</strong></h4><h5 id="1-与nameserver关系"><a href="#1-与nameserver关系" class="headerlink" title="1 与nameserver关系"></a><strong>1 与nameserver关系</strong></h5><p>单个broker和所有nameserver保持长连接</p>
+<p><strong>心跳间隔</strong>：每隔30秒（<strong>此时间无法更改</strong>）向所有nameserver发送心跳，心跳包含了自身的topic配置信息。</p>
+<p><strong>心跳超时</strong>：nameserver每隔10秒钟（<strong>此时间无法更改</strong>），扫描所有还存活的broker连接，若某个连接2分钟内（<strong>当前时间与最后更新时间差值超过2分钟，此时间无法更改</strong>）没有发送心跳数据，则断开连接。</p>
+<p><strong>时机</strong>：broker挂掉；心跳超时导致nameserver主动关闭连接</p>
+<p><strong>动作</strong>：一旦连接断开，nameserver会立即感知，更新topc与队列的对应关系，但不会通知生产者和消费者</p>
+<p><strong>2 负载均衡</strong><br>一个topic分布在多个broker上，一个broker可以配置多个topic，它们是多对多的关系。<br>如果某个topic消息量很大，应该给它多配置几个队列，并且尽量多分布在不同broker上，减轻某个broker的压力。<br>topic消息量都比较均匀的情况下，如果某个broker上的队列越多，则该broker压力越大。</p>
+<p><strong>3 可用性</strong><br>由于消息分布在各个broker上，一旦某个broker宕机，则该broker上的消息读写都会受到影响。所以rocketmq提供了master/slave的结构，salve定时从master同步数据，如果master宕机，则slave提供消费服务，但是不能写入消息，此过程对应用透明，由rocketmq内部解决。<br>这里有两个关键点：<br>一旦某个broker master宕机，生产者和消费者多久才能发现？受限于rocketmq的网络连接机制，默认情况下，最多需要30秒，但这个时间可由应用设定参数来缩短时间。这个时间段内，发往该broker的消息都是失败的，而且该broker的消息无法消费，因为此时消费者不知道该broker已经挂掉。<br>消费者得到master宕机通知后，转向slave消费，但是slave不能保证master的消息100%都同步过来了，因此会有少量的消息丢失。但是消息最终不会丢的，一旦master恢复，未同步过去的消息会被消费掉。</p>
+<p><strong>4 可靠性</strong><br>所有发往broker的消息，有同步刷盘和异步刷盘机制，总的来说，可靠性非常高<br>同步刷盘时，消息写入物理文件才会返回成功，因此非常可靠<br>异步刷盘时，只有机器宕机，才会产生消息丢失，broker挂掉可能会发生，但是机器宕机崩溃是很少发生的，除非突然断电</p>
+<h4 id="消费者"><a href="#消费者" class="headerlink" title="消费者"></a>消费者</h4><p><strong>1 与nameserver关系</strong><br><strong>连接</strong><br>单个消费者和一台nameserver保持长连接，定时查询topic配置信息，如果该nameserver挂掉，消费者会自动连接下一个nameserver，直到有可用连接为止，并能自动重连。<br><strong>心跳</strong><br>与nameserver没有心跳<br><strong>轮询时间</strong><br>默认情况下，消费者每隔30秒从nameserver获取所有topic的最新队列情况，这意味着某个broker如果宕机，客户端最多要30秒才能感知。该时间由DefaultMQPushConsumer的pollNameServerInteval参数决定，可手动配置。</p>
+<p><strong>2 与broker关系</strong><br><strong>连接</strong>：<br>单个消费者和该消费者关联的所有broker保持长连接。<br><strong>心跳</strong>：<br>默认情况下，消费者每隔30秒向所有broker发送心跳，该时间由DefaultMQPushConsumer的heartbeatBrokerInterval参数决定，可手动配置。broker每隔10秒钟（此时间无法更改），扫描所有还存活的连接，若某个连接2分钟内（当前时间与最后更新时间差值超过2分钟，此时间无法更改）没有发送心跳数据，则关闭连接，并向该消费者分组的所有消费者发出通知，分组内消费者重新分配队列继续消费<br><strong>断开</strong>：<br>时机：消费者挂掉；心跳超时导致broker主动关闭连接<br>动作：一旦连接断开，broker会立即感知到，并向该消费者分组的所有消费者发出通知，分组内消费者重新分配队列继续消费</p>
+<p><strong>3 消费机制</strong><br><strong>本地队列</strong><br>消费者不间断的从broker拉取消息，消息拉取到本地队列，然后本地消费线程消费本地消息队列，只是一个异步过程，拉取线程不会等待本地消费线程，这种模式实时性非常高。对消费者对本地队列有一个保护，因此本地消息队列不能无限大，否则可能会占用大量内存，本地队列大小由DefaultMQPushConsumer的pullThresholdForQueue属性控制，默认1000，可手动设置。</p>
+<p><strong>4 如果一个topic在某broker上有3个队列，一个消费者消费这3个队列，那么该消费者和这个broker有几个连接？</strong><br>一个连接，消费单位与队列相关，消费连接只跟broker相关，事实上，消费者将所有队列的消息拉取任务放到本地的队列，挨个拉取，拉取完毕后，又将拉取任务放到队尾，然后执行下一个拉取任务</p>
+<h4 id="生产者"><a href="#生产者" class="headerlink" title="生产者"></a>生产者</h4><p><strong>1 与nameserver关系</strong><br><strong>连接</strong><br>单个生产者者和一台nameserver保持长连接，定时查询topic配置信息，如果该nameserver挂掉，生产者会自动连接下一个nameserver，直到有可用连接为止，并能自动重连。<br><strong>轮询时间</strong><br>默认情况下，生产者每隔30秒从nameserver获取所有topic的最新队列情况，这意味着某个broker如果宕机，生产者最多要30秒才能感知，在此期间，发往该broker的消息发送失败。该时间由DefaultMQProducer的pollNameServerInteval参数决定，可手动配置。<br><strong>心跳</strong><br>与nameserver没有心跳</p>
+<p><strong>2 与broker关系</strong><br><strong>连接</strong><br>单个生产者和该生产者关联的所有broker保持长连接。<br><strong>心跳</strong><br>默认情况下，生产者每隔30秒向所有broker发送心跳，该时间由DefaultMQProducer的heartbeatBrokerInterval参数决定，可手动配置。broker每隔10秒钟（此时间无法更改），扫描所有还存活的连接，若某个连接2分钟内（当前时间与最后更新时间差值超过2分钟，此时间无法更改）没有发送心跳数据，则关闭连接。<br><strong>连接断开</strong><br>移除broker上的生产者信息</p>
+<p><strong>3 负载均衡</strong><br>生产者时间没有关系，每个生产者向队列轮流发送消息</p>
+<p><strong>其他参数概念</strong>：</p>
+<p><strong>Topic</strong>:一级消息主题（类型）（例如服装订单消息，支付消息）</p>
+<p><strong>Tags</strong>:二级消息类型 （具体分类，例如男装，女装）</p>
+<p>什么时候用topic? 什么时候用tag?</p>
+<ul>
+<li>消息类型是否一致？不同，用topic区分</li>
+<li>业务是否相关联，没有关系用topic区分，有关系用tag区分</li>
+<li>消息的优先级是否一致，不同优先级用不同topic区分</li>
+<li>消息量是否相当 不同用topic区分</li>
+</ul>
+<p><strong>Message key</strong>:业务层面唯一标识，rocket 会建立key与消息的映射（hash索引）适用解决幂等问题</p>
+<p><strong>MessageID</strong>:rocketMq全局唯一标识（内部机制id，机器ip，消息偏移量）</p>
+<p>三种发送方式：</p>
+<ul>
+<li>单向发送 ：最快，数据有可能丢失  适用日志收集</li>
+<li>同步可靠发送 ：快 数据不丢失 消息量较小  通知，短信</li>
+<li>异步可靠发送  ： 视频上传等</li>
+</ul>
+<h3 id="消费者-1"><a href="#消费者-1" class="headerlink" title="消费者"></a>消费者</h3><p><strong>群组消费</strong>：一个队列只能被一个消费者消费</p>
+<p><strong>广播消费</strong>：每个消费者都消费所有消息</p>
+<h4 id="消费方式："><a href="#消费方式：" class="headerlink" title="消费方式："></a>消费方式：</h4><p><strong>拉模式</strong>：需要自己处理queue，自己保存偏移量，灵活，代码多</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">PullConsumer</span> </span>&#123;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> Map&lt;MessageQueue, Long&gt; OFFSE_TABLE = <span class="keyword">new</span> HashMap&lt;MessageQueue, Long&gt;();</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> <span class="keyword">throws</span> MQClientException </span>&#123;</span><br><span class="line">        <span class="comment">//拉模式</span></span><br><span class="line">        DefaultMQPullConsumer consumer = <span class="keyword">new</span> DefaultMQPullConsumer(<span class="string">&quot;pullconsumer&quot;</span>);</span><br><span class="line">        consumer.setNamesrvAddr(<span class="string">&quot;192.168.0.128:9876&quot;</span>);</span><br><span class="line">        <span class="comment">//consumer.setBrokerSuspendMaxTimeMillis(1000);</span></span><br><span class="line"></span><br><span class="line">        System.out.println(<span class="string">&quot;ms:&quot;</span>+consumer.getBrokerSuspendMaxTimeMillis());</span><br><span class="line">        consumer.start();</span><br><span class="line"></span><br><span class="line">        <span class="comment">//1.获取MessageQueues并遍历（一个Topic包括多个MessageQueue  默认4个）</span></span><br><span class="line">        Set&lt;MessageQueue&gt; mqs = consumer.fetchSubscribeMessageQueues(<span class="string">&quot;TopicTest&quot;</span>);</span><br><span class="line">        <span class="keyword">for</span> (MessageQueue mq : mqs) &#123;</span><br><span class="line">            System.out.println(<span class="string">&quot;queueID:&quot;</span>+ mq.getQueueId());</span><br><span class="line">            <span class="comment">//获取偏移量</span></span><br><span class="line">            <span class="keyword">long</span> Offset = consumer.fetchConsumeOffset(mq,<span class="keyword">true</span>);</span><br><span class="line"></span><br><span class="line">            System.out.printf(<span class="string">&quot;Consume from the queue: %s%n&quot;</span>, mq);</span><br><span class="line">            SINGLE_MQ:</span><br><span class="line">            <span class="keyword">while</span> (<span class="keyword">true</span>) &#123; <span class="comment">//拉模式，必须无限循环</span></span><br><span class="line">                <span class="keyword">try</span> &#123;</span><br><span class="line">                    PullResult pullResult =</span><br><span class="line">                        consumer.pullBlockIfNotFound(mq, <span class="keyword">null</span>, getMessageQueueOffset(mq), <span class="number">32</span>);</span><br><span class="line">                    System.out.printf(<span class="string">&quot;%s%n&quot;</span>,pullResult);</span><br><span class="line">                    <span class="comment">//2.维护Offsetstore（这里存入一个Map）</span></span><br><span class="line">                    putMessageQueueOffset(mq, pullResult.getNextBeginOffset());</span><br><span class="line"></span><br><span class="line">                    <span class="comment">//3.根据不同的消息状态做不同的处理</span></span><br><span class="line">                    <span class="keyword">switch</span> (pullResult.getPullStatus()) &#123;</span><br><span class="line">                        <span class="keyword">case</span> FOUND: <span class="comment">//获取到消息</span></span><br><span class="line">                            <span class="keyword">for</span> (<span class="keyword">int</span> i=<span class="number">0</span>;i&lt;pullResult.getMsgFoundList().size();i++) &#123;</span><br><span class="line">                                System.out.printf(<span class="string">&quot;%s%n&quot;</span>, <span class="keyword">new</span> String(pullResult.getMsgFoundList().get(i).getBody()));</span><br><span class="line">                            &#125;</span><br><span class="line">                            <span class="keyword">break</span>;</span><br><span class="line">                        <span class="keyword">case</span> NO_MATCHED_MSG: <span class="comment">//没有匹配的消息</span></span><br><span class="line">                            <span class="keyword">break</span>;</span><br><span class="line">                        <span class="keyword">case</span> NO_NEW_MSG:  <span class="comment">//没有新消息</span></span><br><span class="line">                            <span class="keyword">break</span> SINGLE_MQ;</span><br><span class="line">                        <span class="keyword">case</span> OFFSET_ILLEGAL: <span class="comment">//非法偏移量</span></span><br><span class="line">                            <span class="keyword">break</span>;</span><br><span class="line">                        <span class="keyword">default</span>:</span><br><span class="line">                            <span class="keyword">break</span>;</span><br><span class="line">                    &#125;</span><br><span class="line">                &#125; <span class="keyword">catch</span> (Exception e) &#123;</span><br><span class="line">                    e.printStackTrace();</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        consumer.shutdown();</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">long</span> <span class="title">getMessageQueueOffset</span><span class="params">(MessageQueue mq)</span> </span>&#123;</span><br><span class="line">        Long offset = OFFSE_TABLE.get(mq);</span><br><span class="line">        <span class="keyword">if</span> (offset != <span class="keyword">null</span>)</span><br><span class="line">            <span class="keyword">return</span> offset;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">putMessageQueueOffset</span><span class="params">(MessageQueue mq, <span class="keyword">long</span> offset)</span> </span>&#123;</span><br><span class="line">        OFFSE_TABLE.put(mq, offset);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>推模式</strong>: 本质上是用拉模式封装的</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> <span class="keyword">throws</span> InterruptedException, MQClientException </span>&#123;</span><br><span class="line">    DefaultMQPushConsumer consumer = <span class="keyword">new</span> DefaultMQPushConsumer(<span class="string">&quot;group1&quot;</span>);</span><br><span class="line">    consumer.subscribe(<span class="string">&quot;TopicTest&quot;</span>, <span class="string">&quot;*&quot;</span>);</span><br><span class="line">    consumer.setNamesrvAddr(<span class="string">&quot;192.168.0.128:9876&quot;</span>);</span><br><span class="line">    consumer.setAllocateMessageQueueStrategy(<span class="keyword">new</span> AllocateMessageQueueAveragely());</span><br><span class="line">    consumer.setConsumeFromWhere(ConsumeFromWhere.CONSUME_FROM_LAST_OFFSET);<span class="comment">//每次从最后一次消费的地址</span></span><br><span class="line">    consumer.registerMessageListener(<span class="keyword">new</span> MessageListenerConcurrently() &#123;</span><br><span class="line">        <span class="meta">@Override</span></span><br><span class="line">        <span class="function"><span class="keyword">public</span> ConsumeConcurrentlyStatus <span class="title">consumeMessage</span><span class="params">(List&lt;MessageExt&gt; msgs, ConsumeConcurrentlyContext context)</span> </span>&#123;</span><br><span class="line">            System.out.printf(<span class="string">&quot;queueID:%d:%s:Messages:%s %n&quot;</span>,  msgs.get(<span class="number">0</span>).getQueueId(),Thread.currentThread().getName(), <span class="keyword">new</span> String(msgs.get(<span class="number">0</span>).getBody()));</span><br><span class="line">            <span class="keyword">return</span> ConsumeConcurrentlyStatus.CONSUME_SUCCESS;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;);</span><br><span class="line">    consumer.start();</span><br><span class="line">    System.out.printf(<span class="string">&quot;ConsumerPartOrder Started.%n&quot;</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h4 id="消息发送流程"><a href="#消息发送流程" class="headerlink" title="消息发送流程"></a>消息发送流程</h4><ul>
+<li>验证消息</li>
+<li>查找路由</li>
+<li>消息发送</li>
+</ul>
+<h4 id="消息队列负载"><a href="#消息队列负载" class="headerlink" title="消息队列负载"></a>消息队列负载</h4><ul>
+<li>平均分配 AllocateMessageQueueAveragely  （默认情况使用）</li>
+<li>平均轮询分配 AllocateMessageQueueAveragelyByCircle</li>
+<li>一致性hash</li>
+<li>根据配置</li>
+<li>根据broker部署的机房名</li>
+</ul>
+<h4 id="重新分布机制"><a href="#重新分布机制" class="headerlink" title="重新分布机制"></a>重新分布机制</h4><p>RebalanceService 每隔20s进行一次队列负载</p>
+<h4 id="消息确认（ACK）"><a href="#消息确认（ACK）" class="headerlink" title="消息确认（ACK）"></a>消息确认（ACK）</h4><p>确保消费者成功 ConsumeConcurrentlyStatus</p>
+<p>每次去消费的时候，记录消费进度，只会把一批（最小的offset进行确认存储），不去一条条提交偏移量</p>
+<p>问题：会出现重复消费，在业务中进行幂等处理。</p>
+<h4 id="失败重试"><a href="#失败重试" class="headerlink" title="失败重试"></a>失败重试</h4><p>首先进入%RETRY%consumerGroup</p>
+<p>重新发送到原来的队列（延迟10s）</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">consumer.setMaxReconsumeTimes(<span class="number">3</span>);<span class="comment">//重试次数,默认15次</span></span><br></pre></td></tr></table></figure>
+
+<p>超过重试次数，进入DLQ队列</p>
+<h3 id="顺序消息"><a href="#顺序消息" class="headerlink" title="顺序消息"></a>顺序消息</h3><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//排序的监听事件</span></span><br><span class="line">consumer.registerMessageListener(<span class="keyword">new</span> MessageListenerOrderly() &#123;</span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> ConsumeOrderlyStatus <span class="title">consumeMessage</span><span class="params">(List&lt;MessageExt&gt; msgs, ConsumeOrderlyContext context)</span> </span>&#123;</span><br><span class="line">        System.out.printf(<span class="string">&quot;%s:Messages:%s %n&quot;</span>, Thread.currentThread().getName(), <span class="keyword">new</span> String(msgs.get(<span class="number">0</span>).getBody()));</span><br><span class="line">        <span class="keyword">return</span> ConsumeOrderlyStatus.SUCCESS;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;);</span><br></pre></td></tr></table></figure>
+
+<h4 id="RocketMq事务消息"><a href="#RocketMq事务消息" class="headerlink" title="RocketMq事务消息"></a>RocketMq事务消息</h4><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> <span class="keyword">throws</span> MQClientException, InterruptedException </span>&#123;</span><br><span class="line">    TransactionListener transactionListener = <span class="keyword">new</span> TransactionListenerImpl();</span><br><span class="line">    <span class="comment">//支持事务的生产者 TransactionMQProducer</span></span><br><span class="line">    TransactionMQProducer producer = <span class="keyword">new</span> TransactionMQProducer(<span class="string">&quot;transaction_producer&quot;</span>);</span><br><span class="line">    producer.setNamesrvAddr(<span class="string">&quot;192.168.0.128:9876&quot;</span>);</span><br><span class="line">    <span class="comment">//设置用于事务消息的处理线程池</span></span><br><span class="line">    ExecutorService executorService = <span class="keyword">new</span> ThreadPoolExecutor(<span class="number">2</span>, <span class="number">5</span>, <span class="number">100</span>, TimeUnit.SECONDS, <span class="keyword">new</span> ArrayBlockingQueue&lt;Runnable&gt;(<span class="number">2000</span>), <span class="keyword">new</span> ThreadFactory() &#123;</span><br><span class="line">        <span class="meta">@Override</span></span><br><span class="line">        <span class="function"><span class="keyword">public</span> Thread <span class="title">newThread</span><span class="params">(Runnable r)</span> </span>&#123;</span><br><span class="line">            Thread thread = <span class="keyword">new</span> Thread(r);</span><br><span class="line">            thread.setName(<span class="string">&quot;client-transaction-msg-check-thread&quot;</span>);</span><br><span class="line">            <span class="keyword">return</span> thread;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;);</span><br><span class="line"></span><br><span class="line">    producer.setExecutorService(executorService);</span><br><span class="line">    <span class="comment">//设置事务监听器，监听器实现接口org.apache.rocketmq.client.producer.TransactionListener</span></span><br><span class="line">    <span class="comment">//监听器中实现需要处理的交易业务逻辑的处理，以及MQ Broker中未确认的事务与业务的确认逻辑</span></span><br><span class="line">    producer.setTransactionListener(transactionListener);</span><br><span class="line">    producer.start();</span><br><span class="line"></span><br><span class="line">    <span class="comment">//生成不同的Tag，用于模拟不同的处理场景</span></span><br><span class="line">    String[] tags = <span class="keyword">new</span> String[] &#123;<span class="string">&quot;TagA&quot;</span>, <span class="string">&quot;TagB&quot;</span>, <span class="string">&quot;TagC&quot;</span>, <span class="string">&quot;TagD&quot;</span>, <span class="string">&quot;TagE&quot;</span>&#125;;</span><br><span class="line">    <span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">0</span>; i &lt; <span class="number">10</span>; i++) &#123;<span class="comment">//10条消息</span></span><br><span class="line">        <span class="keyword">try</span> &#123;</span><br><span class="line">            <span class="comment">//组装产生消息</span></span><br><span class="line">            Message msg =</span><br><span class="line">                    <span class="keyword">new</span> Message(<span class="string">&quot;TopicTransaction&quot;</span>, tags[i % tags.length], <span class="string">&quot;KEY&quot;</span> + i,</span><br><span class="line">                            (<span class="string">&quot;Hello RocketMQ &quot;</span> + i).getBytes(RemotingHelper.DEFAULT_CHARSET));</span><br><span class="line">            <span class="comment">//以事务发送消息，并在事务消息被成功预写入到RocketMQ中后，执行用户定义的交易逻辑，</span></span><br><span class="line">            <span class="comment">//交易逻辑执行成功后，再实现实现业务消息的提交逻辑</span></span><br><span class="line">            SendResult sendResult = producer.sendMessageInTransaction(msg, <span class="keyword">null</span>);</span><br><span class="line">            System.out.printf(<span class="string">&quot;%s%n&quot;</span>, sendResult);</span><br><span class="line">            Thread.sleep(<span class="number">10</span>);</span><br><span class="line">        &#125; <span class="keyword">catch</span> (MQClientException | UnsupportedEncodingException e) &#123;</span><br><span class="line">            e.printStackTrace();</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">0</span>; i &lt; <span class="number">100000</span>; i++) &#123;</span><br><span class="line">        Thread.sleep(<span class="number">1000</span>);</span><br><span class="line">    &#125;</span><br><span class="line">    producer.shutdown();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> <span class="keyword">throws</span> InterruptedException, MQClientException </span>&#123;</span><br><span class="line">    DefaultMQPushConsumer consumer = <span class="keyword">new</span> DefaultMQPushConsumer(<span class="string">&quot;transaction_producer&quot;</span>);</span><br><span class="line">    consumer.setNamesrvAddr(<span class="string">&quot;192.168.0.128:9876&quot;</span>);</span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * 设置Consumer第一次启动是从队列头部开始消费还是队列尾部开始消费&lt;br&gt;</span></span><br><span class="line"><span class="comment">     * 如果非第一次启动，那么按照上次消费的位置继续消费</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    consumer.setConsumeFromWhere(ConsumeFromWhere.CONSUME_FROM_FIRST_OFFSET);</span><br><span class="line">    consumer.subscribe(<span class="string">&quot;TopicTransaction&quot;</span>, <span class="string">&quot;*&quot;</span>);</span><br><span class="line">    consumer.registerMessageListener(<span class="keyword">new</span> MessageListenerOrderly() &#123;</span><br><span class="line">        <span class="keyword">private</span> Random random = <span class="keyword">new</span> Random();</span><br><span class="line"></span><br><span class="line">        <span class="meta">@Override</span></span><br><span class="line">        <span class="function"><span class="keyword">public</span> ConsumeOrderlyStatus <span class="title">consumeMessage</span><span class="params">(List&lt;MessageExt&gt; msgs, ConsumeOrderlyContext context)</span> </span>&#123;</span><br><span class="line">            <span class="comment">// 设置自动提交</span></span><br><span class="line">            context.setAutoCommit(<span class="keyword">true</span>);</span><br><span class="line">            <span class="keyword">for</span> (MessageExt msg : msgs) &#123;</span><br><span class="line">                System.out.println(<span class="string">&quot;获取到消息开始消费：&quot;</span>+msg + <span class="string">&quot; , content : &quot;</span> + <span class="keyword">new</span> String(msg.getBody()));</span><br><span class="line">            &#125;</span><br><span class="line">            <span class="keyword">try</span> &#123;</span><br><span class="line">                <span class="comment">// 模拟业务处理</span></span><br><span class="line">                TimeUnit.SECONDS.sleep(random.nextInt(<span class="number">5</span>));</span><br><span class="line">            &#125; <span class="keyword">catch</span> (Exception e) &#123;</span><br><span class="line">                e.printStackTrace();</span><br><span class="line">                <span class="comment">//返回处理失败，该消息后续可以继续被消费</span></span><br><span class="line">                <span class="keyword">return</span> ConsumeOrderlyStatus.SUSPEND_CURRENT_QUEUE_A_MOMENT;</span><br><span class="line">            &#125;</span><br><span class="line">            <span class="comment">//返回处理成功，该消息就不会再次投递过来了</span></span><br><span class="line">            <span class="keyword">return</span> ConsumeOrderlyStatus.SUCCESS;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;);</span><br><span class="line">    consumer.start();</span><br><span class="line">    System.out.println(<span class="string">&quot;consumer start ! &quot;</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">TransactionListenerImpl</span> <span class="keyword">implements</span> <span class="title">TransactionListener</span> </span>&#123;</span><br><span class="line">    <span class="keyword">private</span> AtomicInteger transactionIndex = <span class="keyword">new</span> AtomicInteger(<span class="number">0</span>);</span><br><span class="line">    <span class="comment">//使用transactionId</span></span><br><span class="line">    <span class="keyword">private</span> ConcurrentHashMap&lt;String, Integer&gt; localTrans = <span class="keyword">new</span> ConcurrentHashMap&lt;&gt;();</span><br><span class="line"></span><br><span class="line">    <span class="comment">//TODO 执行事务</span></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> LocalTransactionState <span class="title">executeLocalTransaction</span><span class="params">(Message msg, Object arg)</span> </span>&#123;</span><br><span class="line">        <span class="comment">//TODO 执行本地事务开始</span></span><br><span class="line">        <span class="keyword">int</span> value = transactionIndex.getAndIncrement();</span><br><span class="line">        <span class="comment">//业务处理</span></span><br><span class="line">        System.out.println(<span class="string">&quot;执行本地事务...&quot;</span>+value);</span><br><span class="line">        <span class="keyword">int</span> status = value % <span class="number">3</span>;</span><br><span class="line">        localTrans.put(msg.getTransactionId(), status);</span><br><span class="line">        <span class="keyword">switch</span> (status) &#123;</span><br><span class="line">            <span class="keyword">case</span> <span class="number">0</span>:</span><br><span class="line">                <span class="comment">//LocalTransactionState.UNKNOW表示未知的事件，需要RocketMQ进一步服务业务进行确认该交易的处理</span></span><br><span class="line">                <span class="keyword">return</span> LocalTransactionState.UNKNOW;</span><br><span class="line">            <span class="keyword">case</span> <span class="number">1</span>:</span><br><span class="line">                <span class="keyword">return</span> LocalTransactionState.COMMIT_MESSAGE;</span><br><span class="line">            <span class="keyword">case</span> <span class="number">2</span>:</span><br><span class="line">                <span class="keyword">return</span> LocalTransactionState.ROLLBACK_MESSAGE; <span class="comment">//这条消息抛弃了（账户余额不足 1W）</span></span><br><span class="line">            <span class="keyword">default</span>:</span><br><span class="line">                <span class="keyword">return</span> LocalTransactionState.COMMIT_MESSAGE;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="comment">//TODO 执行本地事务结束</span></span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">//该方法用于RocketMQ与业务确认未提交事务的消息的状态（一分钟执行一次）</span></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> LocalTransactionState <span class="title">checkLocalTransaction</span><span class="params">(MessageExt msg)</span> </span>&#123;</span><br><span class="line">        System.out.println(<span class="string">&quot;事务回查-----UNKNOW-----------&quot;</span>);</span><br><span class="line">        Integer status = localTrans.get(msg.getTransactionId());</span><br><span class="line">        <span class="comment">//业务处理（1分钟）</span></span><br><span class="line">        <span class="keyword">int</span> mod = msg.getTransactionId().hashCode() % <span class="number">2</span>;</span><br><span class="line">        <span class="keyword">if</span> (<span class="keyword">null</span> != status) &#123;</span><br><span class="line">            <span class="keyword">switch</span> (mod) &#123;</span><br><span class="line">                <span class="keyword">case</span> <span class="number">0</span>:</span><br><span class="line">                    <span class="keyword">return</span> LocalTransactionState.ROLLBACK_MESSAGE;</span><br><span class="line">                <span class="keyword">case</span> <span class="number">1</span>:</span><br><span class="line">                    <span class="keyword">return</span> LocalTransactionState.COMMIT_MESSAGE;</span><br><span class="line">                <span class="keyword">default</span>:</span><br><span class="line">                    <span class="keyword">return</span> LocalTransactionState.COMMIT_MESSAGE;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> LocalTransactionState.COMMIT_MESSAGE;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://example.com/2020/12/15/study/RocketMQ/" data-id="cklkjks500019y5n45gcrc9gj" data-title="rocketMq学习" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/MQ/" rel="tag">MQ</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+
+
+
+  
     <article id="post-study/rabbitMq" class="h-entry article article-type-post" itemprop="blogPost" itemscope itemtype="https://schema.org/BlogPosting">
   <div class="article-meta">
     <a href="/2020/12/15/study/rabbitMq/" class="article-date">
@@ -276,167 +548,11 @@
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://example.com/2020/12/15/study/rabbitMq/" data-id="cklk7mufr0016zpu41z540tmb" data-title="rabbitMq学习" class="article-share-link">分享</a>
+      <a data-url="http://example.com/2020/12/15/study/rabbitMq/" data-id="cklkjks51001ay5n4921mhp82" data-title="rabbitMq学习" class="article-share-link">分享</a>
       
       
       
   <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/MQ/" rel="tag">MQ</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
-
-
-
-  
-    <article id="post-study/mycat读写分离" class="h-entry article article-type-post" itemprop="blogPost" itemscope itemtype="https://schema.org/BlogPosting">
-  <div class="article-meta">
-    <a href="/2020/12/15/study/mycat%E8%AF%BB%E5%86%99%E5%88%86%E7%A6%BB/" class="article-date">
-  <time class="dt-published" datetime="2020-12-15T02:40:38.000Z" itemprop="datePublished">2020-12-15</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/study/">study</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="p-name article-title" href="/2020/12/15/study/mycat%E8%AF%BB%E5%86%99%E5%88%86%E7%A6%BB/">mycat读写分离</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="e-content article-entry" itemprop="articleBody">
-      
-        <h2 id="读写分离方案选型"><a href="#读写分离方案选型" class="headerlink" title="读写分离方案选型"></a>读写分离方案选型</h2><h3 id="Replication常用架构"><a href="#Replication常用架构" class="headerlink" title="Replication常用架构"></a>Replication常用架构</h3><h4 id="常规复制架构-Master-—-Slaves"><a href="#常规复制架构-Master-—-Slaves" class="headerlink" title="常规复制架构(Master — Slaves)"></a>常规复制架构(Master — Slaves)</h4><img src="/image/mycat读写分离1.png" width="80%">
-
-<p>缺点：</p>
-<ul>
-<li>master不能停机，停机就不能接收写请求</li>
-<li>slave过多会出现延迟</li>
-</ul>
-<p>由于master需要进行常规维护停机了，那么必须要把一个slave提成master，选哪一个是一个问题？<br>某一个slave提成master了，就存在当前master和之前的master数据不一致的情况，并且之前master并没有保存当前master节点的binlog文件和pos位置。</p>
-<h4 id="Dual-Master-复制架构-Master-—-Master-Master"><a href="#Dual-Master-复制架构-Master-—-Master-Master" class="headerlink" title="Dual Master 复制架构(Master — Master) Master)"></a>Dual Master 复制架构(Master — Master) Master)</h4><img src="/image/mycat读写分离2.png" width="80%">
-
-<p>可以配合一个第三方的工具，比如keepalived轻松做到IP的漂移，停机维护也不会影响写操作。</p>
-<h4 id="级联复制架构-Master-—-Slaves-—-Slaves-…-…"><a href="#级联复制架构-Master-—-Slaves-—-Slaves-…-…" class="headerlink" title="级联复制架构(Master — Slaves — Slaves …) …)"></a>级联复制架构(Master — Slaves — Slaves …) …)</h4><img src="/image/mycat读写分离3.png" width="80%">
-
-<p>如果读压力加大，就需要更多的slave来解决，但是如果slave的复制全部从master复制，势必会加大master的复制IO的压力，所以就出现了级联复制，减轻master压力。</p>
-<h4 id="Dual-Master-与级联复制结合架构-Master-Master-Slaves"><a href="#Dual-Master-与级联复制结合架构-Master-Master-Slaves" class="headerlink" title="Dual Master 与级联复制结合架构(Master -Master - Slaves)"></a>Dual Master 与级联复制结合架构(Master -Master - Slaves)</h4><img src="/image/mycat读写分离4.png" width="80%">
-这样解决了单点master的问题，解决了slave级联延迟的问题.
-
-<h4 id="Replication机制的实现原理"><a href="#Replication机制的实现原理" class="headerlink" title="Replication机制的实现原理"></a>Replication机制的实现原理</h4><img src="/image/mycat读写分离5.png" width="80%">
-
-
-<h3 id="mysql主从复制"><a href="#mysql主从复制" class="headerlink" title="mysql主从复制"></a>mysql主从复制</h3><h4 id="基于docker"><a href="#基于docker" class="headerlink" title="基于docker"></a>基于docker</h4><p>1.创建端口为3307的mysql容器：<br>docker run -p 3307:3306  –restart=always  –privileged=true –name mysql -v /home/mysql/docker-data/3307/conf:/etc/mysql/conf.d -v /home/mysql/docker-data/3307/data/:/var/lib/mysql -v /home/mysql/docker-data/3307/logs/:/var/log/mysql -e MYSQL_ROOT_PASSWORD=”123456” -d mysql:5.7</p>
-<p>master my.cnf配置：</p>
-<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">// master配置</span><br><span class="line">server-id=1283307</span><br><span class="line">log-bin=mysql-bin //开启复制功能</span><br><span class="line">auto_increment_increment=2</span><br><span class="line">auto_increment_offset=1</span><br><span class="line">lower_case_table_names=1</span><br><span class="line">binlog-do-db=mstest //要同步的mstest数据库,要同步多个数据库</span><br><span class="line">binlog-ignore-db=mysql //要忽略的数据库</span><br></pre></td></tr></table></figure>
-
-
-<p>2.创建端口为3308的mysql容器：<br>docker run -p 3308:3306  –restart=always  –privileged=true –name mysql -v /home/mysql/docker-data/3308/conf:/etc/mysql/conf.d -v /home/mysql/docker-data/3308/data/:/var/lib/mysql -v /home/mysql/docker-data/3308/logs/:/var/log/mysql -e MYSQL_ROOT_PASSWORD=”123456” -d mysql:5.7</p>
-<p>slave my.cnf配置</p>
-<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">// slave配置</span><br><span class="line">server-id=1293308</span><br><span class="line">log-bin=mysql-bin</span><br><span class="line">auto-increment-increment=2</span><br><span class="line">auto-increment-offset=2</span><br><span class="line">lower_case_table_names=1</span><br><span class="line">replicate-do-db = wang #需要同步的数据库</span><br><span class="line">binlog-ignore-db = mysql</span><br><span class="line">binlog-ignore-db = information_schema</span><br></pre></td></tr></table></figure>
-
-<h5 id="1-在master-mysql添加权限"><a href="#1-在master-mysql添加权限" class="headerlink" title="1.在master mysql添加权限"></a>1.在master mysql添加权限</h5><p>GRANT REPLICATION SLAVE,FILE,REPLICATION CLIENT ON <em>.</em> TO ‘repluser’@’%’ IDENTIFIED BY ‘123456’;<br>FLUSH PRIVILEGES;</p>
-<h5 id="2-在master上查看master的二进制日志"><a href="#2-在master上查看master的二进制日志" class="headerlink" title="2.在master上查看master的二进制日志"></a>2.在master上查看master的二进制日志</h5><img src="/image/mycat12.png" width="80%">
-##### 3 在slave中设置master的信息
-change master to master_host='192.168.231.128',
-master_port=3307,master_user='repluser',master_password='123456',master_log_file='mysql-bin.000001',master_log_pos=154;
-##### 4 开启slave，启动SQL和IO线程
-start slave;
-##### 效果：
-master:新增数据
-<img src="/image/mycat读写分离6.png" width="80%">
-slave:同步数据
-<img src="/image/mycat读写分离7.png" width="80%">
-
-
-
-<h4 id="主从半同步复制："><a href="#主从半同步复制：" class="headerlink" title="主从半同步复制："></a>主从半同步复制：</h4><h5 id="加载lib，所有主从节点都要配置"><a href="#加载lib，所有主从节点都要配置" class="headerlink" title="加载lib，所有主从节点都要配置"></a>加载lib，所有主从节点都要配置</h5><p>主库：install plugin rpl_semi_sync_master soname ‘semisync_master.so’;<br>从库：install plugin rpl_semi_sync_slave soname ‘semisync_slave.so’;<br>可以一起装。建议一起装，因为会有主从切换的情景。</p>
-<h5 id="启用半同步"><a href="#启用半同步" class="headerlink" title="启用半同步"></a>启用半同步</h5><p>先启用从库上的参数，最后启用主库的参数。<br>从库：set global rpl_semi_sync_slave_enabled = {0|1}; # 1：启用，0：禁止<br>主库：<br>set global rpl_semi_sync_master_enabled = {0|1}; # 1：启用，0：禁止</p>
-<p>//设置msater等待slave应答时间（默认10秒），无应答会从半同步复制变成异步复制<br>set global rpl_semi_sync_master_timeout = 10000; # 单位为ms </p>
-<h5 id="查看状态："><a href="#查看状态：" class="headerlink" title="查看状态："></a>查看状态：</h5><img src="/image/mycat读写分离8.png" width="80%">
-wait_point: AFTER_SYNC :增强版半同步复制
-
-<h3 id="mysql高可用"><a href="#mysql高可用" class="headerlink" title="mysql高可用"></a>mysql高可用</h3><img src="/image/mycat读写分离9.png" width="80%">
-##### 配置haproxy
-
-<ul>
-<li><p>新建目录和用户<br>mkdir /etc/haproxy mkdir /var/lib/haproxy useradd -r haproxy</p>
-</li>
-<li><p>配置日志<br>vim /etc/rsyslog.conf<br>Provides TCP syslog reception #去掉下面两行注释，开启TCP监听<br>$ModLoad imudp<br>$UDPServerRun 514<br>local2.* /var/log/haproxy.log #添加日志</p>
-</li>
-<li><p>vi /etc/sysconfig/rsyslog<br>SYSLOGD_OPTIONS=””<br>改为SYSLOGD_OPTIONS=”-r -m 2 -c 2”</p>
-</li>
-<li><p>创建日志文件<br>touch /var/log/haproxy.log</p>
-</li>
-<li><p>启动日志<br>systemctl restart rsyslog.service</p>
-</li>
-<li><p>启动haproxy cd /usr/sbin/haproxy<br>./haproxy -f /etc/haproxy/haproxy.cfg</p>
-</li>
-<li><p>在两台数据库添加远程访问权限<br>GRANT ALL ON <em>.</em> TO ‘root’@’%’ IDENTIFIED BY ‘123456’;<br>FLUSH PRIVILEGES;</p>
-</li>
-<li><p>测试haproxy服务器能否连接到数据库服务器</p>
-</li>
-<li><p>安装mysql客户端<br>yum install -y mysql<br>mysql -uroot -p123456 -h 192.168.231.128<br>mysql -uroot -p123456 -h 192.168.231.129</p>
-</li>
-<li><p>在非haproxy服务器测试通过访问haproxy访问到mysql服务<br>mysql -uroot -p123456 -h 192.168.231.128 -P 3300</p>
-</li>
-<li><p>访问页面<a target="_blank" rel="noopener" href="http://192.168.231.128:1080/stats">http://192.168.231.128:1080/stats</a></p>
-<img src="/image/mycat读写分离10.png" width="80%">
-</li>
-<li><p>keepalived源码安装<br>wget <a target="_blank" rel="noopener" href="http://www.keepalived.org/software/keepalived-1.3.5.tar.gz">http://www.keepalived.org/software/keepalived-1.3.5.tar.gz</a><br>tar -zxvf keepalived-1.3.5.tar.gz</p>
-</li>
-<li><p>安装openssl openssl-devel<br>yum -y install openssl openssl-devel<br>./configure –prefix=/usr/local/keepalived –sbindir=/usr/sbin/ –sysconfdir=/etc/ –<br>mandir=/usr/local/share/man/<br>make &amp;&amp; make install</p>
-</li>
-<li><p>修改配置<br>vi /etc/keepalived/keepalived.conf</p>
-</li>
-<li><p>给执行权限 # chmod +x /etc/keepalived/chk.sh</p>
-</li>
-<li><p>keepalived yum安装</p>
-</li>
-<li><p>预先安装好epel-release源<br>yum list installed|grep epel-release</p>
-</li>
-<li><p>查找可用安装的keepalived源<br>yum search keepalived</p>
-</li>
-<li><p>命令进行安装<br>yum install keepalived -y</p>
-</li>
-<li><p>启动keepalived服务<br>systemctl start keepalived</p>
-</li>
-<li><p>使用yum安装的会有一个默认配置文件模板</p>
-</li>
-<li><p>路径为/etc/keepalived/keepalived.conf<br>yum install ipvsadm -y</p>
-</li>
-</ul>
-<p>mysql -h 192.168.67.140 -u root -p123456 -P 3307 -e “show status;” &gt;/dev/null 2&gt;&amp;1</p>
-<blockquote>
-<p>/dev/null 2&gt;&amp;1 输出”黑洞”<br>$? 上一个指令是否执行成功<br>0 成功1 失</p>
-</blockquote>
-<h3 id="MyCat配置："><a href="#MyCat配置：" class="headerlink" title="MyCat配置："></a>MyCat配置：</h3><h4 id="结构图如下："><a href="#结构图如下：" class="headerlink" title="结构图如下："></a>结构图如下：</h4><img src="/image/mycat读写分离11.png" width="80%">
-##### 将MyCat配置到环境变量中
- vi /etc/profile
-增加如下内容　　　　　　　　　
-MYCAT_HOME=/usr/local/mycat
-PATH=$MYCAT_HOME/bin:$PATH
-
-<p>配置schema.xml：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line">&lt;?xml version&#x3D;&quot;1.0&quot;?&gt;</span><br><span class="line">&lt;!DOCTYPE mycat:schema SYSTEM &quot;schema.dtd&quot;&gt;</span><br><span class="line">&lt;mycat:schema xmlns:mycat&#x3D;&quot;http:&#x2F;&#x2F;io.mycat&#x2F;&quot;&gt;</span><br><span class="line">    &lt;!-- 定义虚拟数据库名称 --&gt;</span><br><span class="line">    &lt;schema name&#x3D;&quot;mycat_mdr&quot; checkSQLschema&#x3D;&quot;false&quot; sqlMaxLimit&#x3D;&quot;100&quot; dataNode&#x3D;&quot;dn1&quot; &gt;</span><br><span class="line">        &lt;!-- 这里配置分库分表，因只做读写分离所以这里暂不配置 --&gt;</span><br><span class="line">    &lt;&#x2F;schema&gt;</span><br><span class="line"></span><br><span class="line">    &lt;dataNode name&#x3D;&quot;dn1&quot; dataHost&#x3D;&quot;192.168.231.128&quot; database&#x3D;&quot;marvel_test&quot; &#x2F;&gt; </span><br><span class="line">    &lt;!-- 上述这里三个参数分别是定义dataNode的别名、数据库的IP或局域网服务器的别名在hosts中配置、数据库名 --&gt;</span><br><span class="line">    &lt;!-- 将balance设置为3表示开启读写分离 --&gt;</span><br><span class="line">    &lt;dataHost name&#x3D;&quot;localhost&quot; maxCon&#x3D;&quot;1000&quot; minCon&#x3D;&quot;10&quot; balance&#x3D;&quot;3&quot;</span><br><span class="line">              writeType&#x3D;&quot;0&quot; dbType&#x3D;&quot;mysql&quot; dbDriver&#x3D;&quot;native&quot; switchType&#x3D;&quot;1&quot;  slaveThreshold&#x3D;&quot;100&quot;&gt;</span><br><span class="line">        &lt;!-- 定时执行SQL保持心跳 --&gt;</span><br><span class="line">        &lt;heartbeat&gt;select user()&lt;&#x2F;heartbeat&gt;</span><br><span class="line">        &lt;!-- 添加写入库配置 --&gt;</span><br><span class="line">        &lt;writeHost host&#x3D;&quot;hostM1&quot; url&#x3D;&quot;192.168.231.128:3307&quot; user&#x3D;&quot;root&quot;</span><br><span class="line">                   password&#x3D;&quot;123456&quot;&gt;</span><br><span class="line">            &lt;!-- 添加只读库配置--&gt;</span><br><span class="line">            &lt;readHost host&#x3D;&quot;hostS1&quot; url&#x3D;&quot;192.168.231.129:3308&quot; user&#x3D;&quot;root&quot; password&#x3D;&quot;123456&quot; &#x2F;&gt;</span><br><span class="line">        &lt;&#x2F;writeHost&gt;</span><br><span class="line"></span><br><span class="line">    &lt;&#x2F;dataHost&gt;</span><br><span class="line">&lt;&#x2F;mycat:schema&gt;</span><br></pre></td></tr></table></figure>
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://example.com/2020/12/15/study/mycat%E8%AF%BB%E5%86%99%E5%88%86%E7%A6%BB/" data-id="cklk7mufa0008zpu4b0yc57p1" data-title="mycat读写分离" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/mycat/" rel="tag">mycat</a></li></ul>
 
     </footer>
   </div>
@@ -472,7 +588,7 @@ PATH=$MYCAT_HOME/bin:$PATH
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://example.com/2020/12/15/%E4%B8%80%E4%B8%AAhexo%E7%9A%84%E7%A4%BA%E4%BE%8B/" data-id="cklk7muf30001zpu4darnf0dc" data-title="一个hexo的示例" class="article-share-link">分享</a>
+      <a data-url="http://example.com/2020/12/15/%E4%B8%80%E4%B8%AAhexo%E7%9A%84%E7%A4%BA%E4%BE%8B/" data-id="cklkjks490001y5n4c83v05k1" data-title="一个hexo的示例" class="article-share-link">分享</a>
       
       
       
@@ -528,7 +644,7 @@ PATH=$MYCAT_HOME/bin:$PATH
   <div class="widget-wrap">
     <h3 class="widget-title">归档</h3>
     <div class="widget">
-      <ul class="archive-list"><li class="archive-list-item"><a class="archive-list-link" href="/archives/2021/02/">二月 2021</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2021/01/">一月 2021</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/12/">十二月 2020</a></li></ul>
+      <ul class="archive-list"><li class="archive-list-item"><a class="archive-list-link" href="/archives/2021/03/">三月 2021</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2021/02/">二月 2021</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2021/01/">一月 2021</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/12/">十二月 2020</a></li></ul>
     </div>
   </div>
 
@@ -541,6 +657,10 @@ PATH=$MYCAT_HOME/bin:$PATH
       <ul>
         
           <li>
+            <a href="/2021/03/02/study/mysql5/">mysql锁的认识</a>
+          </li>
+        
+          <li>
             <a href="/2021/02/28/study/DDD2/">DDD概念体系</a>
           </li>
         
@@ -549,15 +669,11 @@ PATH=$MYCAT_HOME/bin:$PATH
           </li>
         
           <li>
-            <a href="/2021/02/25/study/mysql4/">mysql索引</a>
-          </li>
-        
-          <li>
             <a href="/2021/02/25/hello-world/">Hello World</a>
           </li>
         
           <li>
-            <a href="/2021/02/23/study/mysql3/">mysql事务隔离</a>
+            <a href="/2021/02/25/study/mysql4/">mysql索引</a>
           </li>
         
       </ul>
